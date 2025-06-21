@@ -3,6 +3,7 @@ use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 use anchor_spl::associated_token::AssociatedToken;
 use crate::state::{GlobalConfig, BondingCurve};
 use crate::constants::*;
+use crate::errors::ErrorCode;
 
 #[derive(Accounts)]
 pub struct CreateBondingCurve<'info> {
@@ -47,16 +48,23 @@ pub struct CreateBondingCurve<'info> {
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct CreateBondingCurveParams {
     pub initial_supply: u64,
+    pub virtual_token_reserves: u64,
+    pub virtual_sol_reserves: u64,
 }
 
 pub fn create_bonding_curve_handler(ctx: Context<CreateBondingCurve>, params: CreateBondingCurveParams) -> Result<()> {
+    // Validate parameters
+    require!(params.initial_supply > 0, ErrorCode::InvalidAmount);
+    require!(params.virtual_token_reserves > 0, ErrorCode::InvalidAmount);
+    require!(params.virtual_sol_reserves > 0, ErrorCode::InvalidAmount);
+    
     let bonding_curve = &mut ctx.accounts.bonding_curve;
     let global_config = &mut ctx.accounts.global_config;
     
     bonding_curve.mint = ctx.accounts.mint.key();
     bonding_curve.creator = ctx.accounts.creator.key();
-    bonding_curve.virtual_token_reserves = INITIAL_VIRTUAL_TOKEN_RESERVES;
-    bonding_curve.virtual_sol_reserves = INITIAL_VIRTUAL_SOL_RESERVES;
+    bonding_curve.virtual_token_reserves = params.virtual_token_reserves;
+    bonding_curve.virtual_sol_reserves = params.virtual_sol_reserves;
     bonding_curve.real_token_reserves = 0;
     bonding_curve.real_sol_reserves = 0;
     bonding_curve.token_total_supply = params.initial_supply;

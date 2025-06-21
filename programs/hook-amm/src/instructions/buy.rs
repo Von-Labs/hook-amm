@@ -83,11 +83,11 @@ pub fn buy_handler(ctx: Context<Buy>, sol_amount: u64, min_token_amount: u64) ->
         .checked_add(token_amount)
         .unwrap();
     
-    // Transfer SOL from buyer to curve
+    // Transfer SOL from buyer to curve (only the amount after fee)
     let sol_transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
         &ctx.accounts.user.key(),
         &ctx.accounts.bonding_curve.key(),
-        sol_amount,
+        sol_amount_after_fee,
     );
     anchor_lang::solana_program::program::invoke(
         &sol_transfer_ix,
@@ -98,25 +98,20 @@ pub fn buy_handler(ctx: Context<Buy>, sol_amount: u64, min_token_amount: u64) ->
         ],
     )?;
     
-    // Transfer fee to fee recipient
+    // Transfer fee directly from user to fee recipient
     if fee_amount > 0 {
         let fee_transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
-            &ctx.accounts.bonding_curve.key(),
+            &ctx.accounts.user.key(),
             &ctx.accounts.global_config.fee_recipient,
             fee_amount,
         );
-        anchor_lang::solana_program::program::invoke_signed(
+        anchor_lang::solana_program::program::invoke(
             &fee_transfer_ix,
             &[
-                ctx.accounts.bonding_curve.to_account_info(),
+                ctx.accounts.user.to_account_info(),
                 ctx.accounts.fee_recipient.to_account_info(),
                 ctx.accounts.system_program.to_account_info(),
             ],
-            &[&[
-                BONDING_CURVE_SEED,
-                ctx.accounts.mint.key().as_ref(),
-                &[ctx.bumps.bonding_curve],
-            ]],
         )?;
     }
     
