@@ -80,7 +80,7 @@ pub fn buy_handler(ctx: Context<Buy>, sol_amount: u64, min_token_amount: u64) ->
         .checked_add(sol_amount_after_fee)
         .unwrap();
     ctx.accounts.bonding_curve.real_token_reserves = ctx.accounts.bonding_curve.real_token_reserves
-        .checked_add(token_amount)
+        .checked_sub(token_amount)
         .unwrap();
     
     // Transfer SOL from buyer to curve (only the amount after fee)

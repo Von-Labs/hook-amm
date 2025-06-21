@@ -91,7 +91,7 @@ pub fn create_bonding_curve_handler(ctx: Context<CreateBondingCurve>, params: Cr
     bonding_curve.creator = ctx.accounts.creator.key();
     bonding_curve.virtual_token_reserves = params.virtual_token_reserves;
     bonding_curve.virtual_sol_reserves = params.virtual_sol_reserves;
-    bonding_curve.real_token_reserves = params.initial_supply;
+    bonding_curve.real_token_reserves = 0; // Start at 0 - tracks tokens purchased/removed
     bonding_curve.real_sol_reserves = 0;
     bonding_curve.token_total_supply = params.initial_supply;
     bonding_curve.complete = false;

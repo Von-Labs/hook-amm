@@ -313,6 +313,14 @@ Creator → create_bonding_curve(params)
     │  Curve Token Account    │
     │  (Holds tokens for AMM) │
     └─────────────────────────┘
+                │
+                ▼
+    ┌─────────────────────────┐
+    │    Token Transfer       │
+    │ Creator → Curve: tokens │
+    │    Mint Authority       │
+    │      FROZEN 🔒          │
+    └─────────────────────────┘
 ```
 
 ### 3. Trading Flow
@@ -410,8 +418,8 @@ pub struct BondingCurve {
 
 🔹 REAL RESERVES (Dynamic, change with each trade):
 ├── Purpose: Track actual trading activity
-├── real_token_reserves: Tokens actually purchased by users
-├── real_sol_reserves: SOL actually collected from sales
+├── real_token_reserves: Tokens removed from curve (purchased by users)
+├── real_sol_reserves: SOL collected in curve (from user purchases)
 └── Effect: Shifts the price as trading occurs
 
 📊 EFFECTIVE RESERVES (Used in calculations):
@@ -563,7 +571,7 @@ Mathematical relationship:
 
 5. Update real reserves:
    real_sol_reserves += sol_after_fee
-   real_token_reserves += tokens_out
+   real_token_reserves += tokens_out  // Tracks cumulative tokens sold
 ```
 
 #### Sell Transaction Flow
@@ -587,7 +595,7 @@ Mathematical relationship:
 
 5. Update real reserves:
    real_sol_reserves -= sol_out
-   real_token_reserves -= token_amount
+   real_token_reserves -= token_amount  // Decreases cumulative tokens sold
 ```
 
 ### Price Discovery Mechanism

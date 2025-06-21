@@ -9,7 +9,7 @@ import bs58 from 'bs58';
 dotenv.config();
 
 // Program ID (updated with your deployed program)
-export const PROGRAM_ID = new PublicKey('2jJUWMa5RFh2FcQowm2cUgGYwAmMiJfFUrJrw6ti7Sw6');
+export const PROGRAM_ID = new PublicKey('3knogLoPGGJJkda28BjN5N2LCcmEmoyyrua9THojndQr');
 
 // Connection to devnet
 export const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
