@@ -32,8 +32,252 @@ programs/hook-amm/
 │   ├── state/                 # Account structures
 │   │   ├── global_config.rs   # Global configuration
 │   │   └── bonding_curve.rs   # Bonding curve state
-│   └── utils.rs               # Utility functions
+│   └── utils.rs               # Utility functions (including transfer hooks)
 ```
+
+## Transfer Hook Integration
+
+HookAMM provides seamless support for Token-2022 transfer hooks, enabling tokens with custom transfer logic to be traded on the AMM.
+
+### What are Transfer Hooks?
+
+Transfer hooks are a Token-2022 feature that allows custom programs to be executed during token transfers. This enables:
+
+- **Custom Transfer Logic**: Implement restrictions, fees, or special behaviors
+- **Real-time Processing**: Execute code before and after transfers
+- **State Synchronization**: Update external state during transfers
+- **Compliance Features**: Implement KYC/AML or other regulatory requirements
+
+### How Transfer Hooks Work in HookAMM
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    TRANSFER HOOK FLOW                           │
+└─────────────────────────────────────────────────────────────────┘
+
+Regular Token Transfer:
+Token Program → Transfer tokens → Complete
+
+Token-2022 with Hooks:
+Token-2022 Program → Pre-transfer Hook → Transfer → Post-transfer Hook → Complete
+                         │                           │
+                         ▼                           ▼
+                   Hook Program              Hook Program
+                   (Custom logic)           (Cleanup/events)
+```
+
+### Implementation in HookAMM
+
+The program uses a specialized `perform_token_transfer` function in `utils.rs` that automatically detects and handles transfer hooks:
+
+```rust
+pub fn perform_token_transfer<'info>(
+    from: &InterfaceAccount<'info, TokenAccount>,
+    to: &InterfaceAccount<'info, TokenAccount>,
+    authority: &AccountInfo<'info>,
+    token_program: &Interface<'info, TokenInterface>,
+    mint: &InterfaceAccount<'info, Mint>,
+    amount: u64,
+    signer_seeds: &[&[&[u8]]],
+    remaining_accounts: &[AccountInfo<'info>], // ← Hook accounts passed here
+) -> Result<()> {
+    // Detect if this is Token-2022 with transfer hooks
+    let is_token_2022 = token_program.key() == token_2022::ID;
+    
+    if is_token_2022 && !remaining_accounts.is_empty() {
+        // Execute transfer with hook support
+        let mut accounts = vec![
+            from.to_account_info(),
+            mint.to_account_info(),
+            to.to_account_info(),
+            authority.to_account_info(),
+        ];
+        
+        // Add hook program accounts
+        for account in remaining_accounts {
+            accounts.push(account.clone());
+        }
+        
+        // Build transfer instruction with hook support
+        let transfer_ix = anchor_spl::token_2022::spl_token_2022::instruction::transfer_checked(
+            &token_program.key(),
+            &from.key(),
+            &mint.key(),
+            &to.key(),
+            &authority.key(),
+            &[],
+            amount,
+            mint.decimals,
+        )?;
+        
+        // Execute with all required accounts
+        anchor_lang::solana_program::program::invoke_signed(&transfer_ix, &accounts, signer_seeds)?;
+    } else {
+        // Standard SPL transfer without hooks
+        let cpi_ctx = CpiContext::new_with_signer(
+            token_program.to_account_info(),
+            anchor_spl::token_interface::TransferChecked {
+                from: from.to_account_info(),
+                mint: mint.to_account_info(),
+                to: to.to_account_info(),
+                authority: authority.to_account_info(),
+            },
+            signer_seeds
+        );
+        
+        anchor_spl::token_interface::transfer_checked(cpi_ctx, amount, mint.decimals)?;
+    }
+    
+    Ok(())
+}
+```
+
+### Hook Execution Sequence
+
+When a buy/sell transaction involves a token with transfer hooks:
+
+```
+1. User initiates buy/sell
+2. HookAMM processes SOL transfers
+3. HookAMM calls perform_token_transfer()
+4. Function detects Token-2022 + remaining_accounts
+5. Pre-transfer hook executes:
+   ├── Validate transfer
+   ├── Apply custom logic
+   └── Can reject if needed
+6. Actual token transfer occurs
+7. Post-transfer hook executes:
+   ├── Update external state
+   ├── Emit custom events
+   └── Cleanup operations
+8. HookAMM updates reserves
+9. Transaction completes
+```
+
+### Using Transfer Hooks with HookAMM
+
+#### Client-Side Implementation
+
+```typescript
+// For regular SPL tokens (no hooks)
+await program.methods
+  .buy(solAmount, minTokenAmount)
+  .accounts({
+    // ... standard accounts
+  })
+  .rpc();
+
+// For Token-2022 tokens with transfer hooks
+await program.methods
+  .buy(solAmount, minTokenAmount)
+  .accounts({
+    // ... standard accounts
+  })
+  .remainingAccounts([
+    // Hook program accounts (order matters!)
+    { pubkey: hookProgramId, isSigner: false, isWritable: false },
+    { pubkey: hookStateAccount, isSigner: false, isWritable: true },
+    { pubkey: extraMetadataAccount, isSigner: false, isWritable: false },
+    // ... any other accounts the hook needs
+  ])
+  .rpc();
+```
+
+#### Hook Account Discovery
+
+To find the required hook accounts, query the mint:
+
+```typescript
+import { getExtraAccountMetaAddress, getExtraAccountMetas } from '@solana/spl-token';
+
+// Get hook program from mint
+const mintInfo = await getMint(connection, mintAddress, 'confirmed', TOKEN_2022_PROGRAM_ID);
+const transferHookProgramId = getTransferHook(mintInfo);
+
+if (transferHookProgramId) {
+  // Get additional accounts needed by the hook
+  const extraAccountMetaAddress = getExtraAccountMetaAddress(mintAddress, transferHookProgramId);
+  const extraAccountMetas = await getExtraAccountMetas(
+    connection,
+    extraAccountMetaAddress,
+    'confirmed',
+    TOKEN_2022_PROGRAM_ID
+  );
+  
+  // Convert to remaining accounts format
+  const remainingAccounts = extraAccountMetas.map(meta => ({
+    pubkey: meta.addressConfig.address,
+    isSigner: meta.isSigner,
+    isWritable: meta.isWritable,
+  }));
+}
+```
+
+### Common Transfer Hook Use Cases
+
+#### 1. Transfer Restrictions
+```rust
+// Hook can restrict transfers based on:
+- Whitelist/blacklist validation
+- Time-based locks
+- Maximum transfer amounts
+- Geographic restrictions
+```
+
+#### 2. Additional Fees
+```rust
+// Hook can implement:
+- Burn mechanisms (deflationary tokens)
+- Redistribution to holders
+- Treasury accumulation
+- Dynamic fee rates
+```
+
+#### 3. State Synchronization
+```rust
+// Hook can update:
+- User statistics
+- Governance voting power
+- Staking balances
+- External protocol state
+```
+
+#### 4. Gaming Mechanics
+```rust
+// Hook can handle:
+- Item durability updates
+- Experience point calculation
+- Achievement tracking
+- Inventory management
+```
+
+### Error Handling with Hooks
+
+Transfer hooks can fail for various reasons:
+
+```typescript
+try {
+  await hookAmm.buy(buyer, mint, buyParams, TOKEN_2022_PROGRAM_ID, remainingAccounts);
+} catch (error) {
+  if (error.toString().includes('TransferHookFailed')) {
+    console.log('Transfer hook rejected the transaction');
+    // Handle hook-specific logic
+  } else if (error.toString().includes('SlippageExceeded')) {
+    console.log('Price moved too much during execution');
+  }
+}
+```
+
+### Hook Compatibility
+
+HookAMM is compatible with:
+- ✅ Standard SPL tokens
+- ✅ Token-2022 tokens without hooks
+- ✅ Token-2022 tokens with transfer hooks
+- ✅ Multiple hooks per token
+- ✅ Complex hook interactions
+
+The program automatically detects the token type and handles transfers appropriately, making it seamless for users and developers.
 
 ## Program Flow
 
