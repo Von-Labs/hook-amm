@@ -373,18 +373,252 @@ Calculate: fee = sol_out × 1%
 Update bonding curve reserves
 ```
 
-## Bonding Curve Mathematics
+## Bonding Curve Mechanics
 
-The AMM uses a constant product formula with virtual reserves:
+HookAMM implements a sophisticated bonding curve using a constant product formula with virtual and real reserves. This creates a dynamic pricing mechanism that responds to trading activity.
+
+### Understanding the Variables
+
+#### Reserve Types
+
+```rust
+pub struct BondingCurve {
+    pub mint: Pubkey,                    // Token mint address
+    pub creator: Pubkey,                 // Curve creator
+    pub virtual_token_reserves: u64,    // 🔸 Virtual token liquidity
+    pub virtual_sol_reserves: u64,      // 🔸 Virtual SOL liquidity  
+    pub real_token_reserves: u64,       // 🔹 Actual tokens traded
+    pub real_sol_reserves: u64,         // 🔹 Actual SOL collected
+    pub token_total_supply: u64,        // Total token supply
+    pub complete: bool,                  // Curve completion status
+    pub index: u64,                     // Curve index number
+}
+```
+
+#### Virtual vs Real Reserves Explained
 
 ```
-Constant Product: (Virtual SOL + Real SOL) × (Virtual Tokens - Real Tokens) = k
+┌─────────────────────────────────────────────────────────────────┐
+│                    RESERVE COMPOSITION                          │
+└─────────────────────────────────────────────────────────────────┘
 
-Price Calculation:
-- Current Price = Total SOL Reserves / Total Token Reserves
-- Buy Amount = Current Token Reserves - (k / New SOL Reserves)
-- Sell Amount = Current SOL Reserves - (k / New Token Reserves)
+🔸 VIRTUAL RESERVES (Set at creation, never change):
+├── Purpose: Provide initial liquidity and price stability
+├── virtual_token_reserves: Starting available tokens for purchase
+├── virtual_sol_reserves: Starting price reference in SOL
+└── Effect: Determines initial price and curve steepness
+
+🔹 REAL RESERVES (Dynamic, change with each trade):
+├── Purpose: Track actual trading activity
+├── real_token_reserves: Tokens actually purchased by users
+├── real_sol_reserves: SOL actually collected from sales
+└── Effect: Shifts the price as trading occurs
+
+📊 EFFECTIVE RESERVES (Used in calculations):
+├── Effective SOL = virtual_sol_reserves + real_sol_reserves
+├── Effective Tokens = virtual_token_reserves - real_token_reserves
+└── Current Price = Effective SOL ÷ Effective Tokens
 ```
+
+### Mathematical Formula
+
+The bonding curve uses a **Constant Product Formula**:
+
+```
+k = (Virtual SOL + Real SOL) × (Virtual Tokens - Real Tokens)
+
+Where:
+- k = Constant product (liquidity constant)
+- Virtual reserves = Initial liquidity parameters
+- Real reserves = Cumulative trading activity
+```
+
+### Price Calculation Examples
+
+#### Example 1: Initial State
+
+```typescript
+// Curve creation parameters
+virtual_token_reserves = 1,000,000 tokens
+virtual_sol_reserves = 100 SOL
+real_token_reserves = 0 (no trades yet)
+real_sol_reserves = 0 (no trades yet)
+
+// Initial calculations
+effective_sol = 100 + 0 = 100 SOL
+effective_tokens = 1,000,000 - 0 = 1,000,000 tokens
+initial_price = 100 ÷ 1,000,000 = 0.0001 SOL per token
+k = 100 × 1,000,000 = 100,000,000
+```
+
+#### Example 2: After First Buy
+
+```typescript
+// User buys with 10 SOL (9.9 SOL after 1% fee)
+sol_input = 9.9 SOL
+
+// Calculate tokens received
+new_sol_reserves = 100 + 9.9 = 109.9 SOL
+new_token_reserves = 100,000,000 ÷ 109.9 = 909,917 tokens
+tokens_purchased = 1,000,000 - 909,917 = 90,083 tokens
+
+// Update real reserves
+real_sol_reserves = 0 + 9.9 = 9.9 SOL
+real_token_reserves = 0 + 90,083 = 90,083 tokens
+
+// New effective reserves
+effective_sol = 100 + 9.9 = 109.9 SOL
+effective_tokens = 1,000,000 - 90,083 = 909,917 tokens
+new_price = 109.9 ÷ 909,917 = 0.0001208 SOL per token
+
+// Price increased by: (0.0001208 - 0.0001) ÷ 0.0001 = 20.8%
+```
+
+### Price Impact Visualization
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    BONDING CURVE SHAPE                         │
+└─────────────────────────────────────────────────────────────────┘
+
+Price │
+  ^   │      ┌─────────────────────────────
+  │   │    ┌─┘                            
+  │   │  ┌─┘    ← Price increases as tokens are bought
+  │   │┌─┘       (SOL reserves grow, token reserves shrink)
+  │   └─────────────────────────────────────────► Tokens Sold
+      │
+Initial Price (determined by virtual reserves ratio)
+
+Mathematical relationship:
+- More tokens bought = Higher price (exponential growth)
+- More tokens sold = Lower price (exponential decay)
+- Virtual reserves = "Price floor" and liquidity depth
+```
+
+### Variable Impact on Price Curves
+
+#### High Virtual SOL (Expensive Launch)
+
+```typescript
+{
+  virtual_token_reserves: 1_000_000,  // 1M tokens
+  virtual_sol_reserves: 1000,         // 1000 SOL
+}
+// Initial price: 1000 ÷ 1,000,000 = 0.001 SOL per token (EXPENSIVE)
+// Effect: High starting price, steep price increases
+```
+
+#### Low Virtual SOL (Cheap Launch)
+
+```typescript
+{
+  virtual_token_reserves: 1_000_000,  // 1M tokens  
+  virtual_sol_reserves: 1,            // 1 SOL
+}
+// Initial price: 1 ÷ 1,000,000 = 0.000001 SOL per token (CHEAP)
+// Effect: Low starting price, gradual price increases
+```
+
+#### High Virtual Tokens (Stable Pricing)
+
+```typescript
+{
+  virtual_token_reserves: 10_000_000, // 10M tokens
+  virtual_sol_reserves: 100,          // 100 SOL
+}
+// Effect: More liquidity depth, smaller price impact per trade
+```
+
+#### Low Virtual Tokens (Volatile Pricing)
+
+```typescript
+{
+  virtual_token_reserves: 100_000,    // 100K tokens
+  virtual_sol_reserves: 100,          // 100 SOL  
+}
+// Effect: Less liquidity depth, larger price impact per trade
+```
+
+### Trading Calculations
+
+#### Buy Transaction Flow
+
+```
+1. User inputs: sol_amount = 10 SOL
+
+2. Calculate fee:
+   fee = 10 × 1% = 0.1 SOL
+   sol_after_fee = 10 - 0.1 = 9.9 SOL
+
+3. Calculate effective reserves:
+   current_sol = virtual_sol_reserves + real_sol_reserves
+   current_tokens = virtual_token_reserves - real_token_reserves
+
+4. Apply constant product formula:
+   k = current_sol × current_tokens
+   new_sol = current_sol + sol_after_fee
+   new_tokens = k ÷ new_sol
+   tokens_out = current_tokens - new_tokens
+
+5. Update real reserves:
+   real_sol_reserves += sol_after_fee
+   real_token_reserves += tokens_out
+```
+
+#### Sell Transaction Flow
+
+```
+1. User inputs: token_amount = 1000 tokens
+
+2. Calculate effective reserves:
+   current_sol = virtual_sol_reserves + real_sol_reserves  
+   current_tokens = virtual_token_reserves - real_token_reserves
+
+3. Apply constant product formula:
+   k = current_sol × current_tokens
+   new_tokens = current_tokens + token_amount
+   new_sol = k ÷ new_tokens
+   sol_out = current_sol - new_sol
+
+4. Calculate fee:
+   fee = sol_out × 1% = sol_out × 0.01
+   sol_after_fee = sol_out - fee
+
+5. Update real reserves:
+   real_sol_reserves -= sol_out
+   real_token_reserves -= token_amount
+```
+
+### Price Discovery Mechanism
+
+The bonding curve creates automatic price discovery through:
+
+1. **Supply Pressure**: As tokens are bought, available supply decreases
+2. **Demand Premium**: Higher demand leads to exponentially higher prices  
+3. **Liquidity Depth**: Virtual reserves provide baseline liquidity
+4. **Market Efficiency**: Arbitrage opportunities maintain fair pricing
+
+### Curve Completion
+
+Curves can be designed to "complete" when certain conditions are met:
+
+```rust
+// Example completion condition (can be customized)
+let completion_threshold = virtual_token_reserves * 90 / 100; // 90% of tokens sold
+
+if real_token_reserves >= completion_threshold {
+    bonding_curve.complete = true;
+    // Could migrate to a traditional AMM like Raydium
+}
+```
+
+### Gas Optimization Notes
+
+- All calculations use checked math to prevent overflow
+- Virtual reserves are stored once, real reserves updated per trade
+- Price calculations happen off-chain for quotes, on-chain for execution
+- Constant product formula provides O(1) time complexity
 
 ## Getting Started
 
