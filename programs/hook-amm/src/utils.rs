@@ -8,12 +8,26 @@ pub fn calculate_buy_amount(
     sol_reserves: u64,
     token_reserves: u64,
 ) -> Result<u64> {
-    let new_sol_reserves = sol_reserves.checked_add(sol_amount).ok_or(ErrorCode::Overflow)?;
-    let new_token_reserves = sol_reserves
-        .checked_mul(token_reserves).ok_or(ErrorCode::Overflow)?
-        .checked_div(new_sol_reserves).ok_or(ErrorCode::Overflow)?;
+    // Use u128 for intermediate calculations to prevent overflow
+    let sol_amount_u128 = sol_amount as u128;
+    let sol_reserves_u128 = sol_reserves as u128;
+    let token_reserves_u128 = token_reserves as u128;
     
-    token_reserves.checked_sub(new_token_reserves).ok_or(ErrorCode::InsufficientReserves.into())
+    let new_sol_reserves_u128 = sol_reserves_u128.checked_add(sol_amount_u128).ok_or(ErrorCode::Overflow)?;
+    
+    // k = sol_reserves * token_reserves (using u128 to prevent overflow)
+    let k = sol_reserves_u128.checked_mul(token_reserves_u128).ok_or(ErrorCode::Overflow)?;
+    
+    // new_token_reserves = k / new_sol_reserves
+    let new_token_reserves_u128 = k.checked_div(new_sol_reserves_u128).ok_or(ErrorCode::Overflow)?;
+    
+    // tokens_out = token_reserves - new_token_reserves
+    let tokens_out_u128 = token_reserves_u128.checked_sub(new_token_reserves_u128).ok_or(ErrorCode::InsufficientReserves)?;
+    
+    // Convert back to u64, checking for overflow
+    let tokens_out = u64::try_from(tokens_out_u128).map_err(|_| ErrorCode::Overflow)?;
+    
+    Ok(tokens_out)
 }
 
 pub fn calculate_sell_amount(
@@ -21,12 +35,26 @@ pub fn calculate_sell_amount(
     token_reserves: u64,
     sol_reserves: u64,
 ) -> Result<u64> {
-    let new_token_reserves = token_reserves.checked_add(token_amount).ok_or(ErrorCode::Overflow)?;
-    let new_sol_reserves = token_reserves
-        .checked_mul(sol_reserves).ok_or(ErrorCode::Overflow)?
-        .checked_div(new_token_reserves).ok_or(ErrorCode::Overflow)?;
+    // Use u128 for intermediate calculations to prevent overflow
+    let token_amount_u128 = token_amount as u128;
+    let token_reserves_u128 = token_reserves as u128;
+    let sol_reserves_u128 = sol_reserves as u128;
     
-    sol_reserves.checked_sub(new_sol_reserves).ok_or(ErrorCode::InsufficientReserves.into())
+    let new_token_reserves_u128 = token_reserves_u128.checked_add(token_amount_u128).ok_or(ErrorCode::Overflow)?;
+    
+    // k = token_reserves * sol_reserves (using u128 to prevent overflow)
+    let k = token_reserves_u128.checked_mul(sol_reserves_u128).ok_or(ErrorCode::Overflow)?;
+    
+    // new_sol_reserves = k / new_token_reserves
+    let new_sol_reserves_u128 = k.checked_div(new_token_reserves_u128).ok_or(ErrorCode::Overflow)?;
+    
+    // sol_out = sol_reserves - new_sol_reserves
+    let sol_out_u128 = sol_reserves_u128.checked_sub(new_sol_reserves_u128).ok_or(ErrorCode::InsufficientReserves)?;
+    
+    // Convert back to u64, checking for overflow
+    let sol_out = u64::try_from(sol_out_u128).map_err(|_| ErrorCode::Overflow)?;
+    
+    Ok(sol_out)
 }
 
 pub fn perform_token_transfer<'info>(

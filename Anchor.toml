@@ -6,13 +6,15 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-hook_amm = "9rftcX9CMpRaZJUteZ5yyY5bxy2LKSGRfp3xq9uP1SaC"
+hook_amm = "2jJUWMa5RFh2FcQowm2cUgGYwAmMiJfFUrJrw6ti7Sw6"
+[programs.devnet]
+hook_amm = "2jJUWMa5RFh2FcQowm2cUgGYwAmMiJfFUrJrw6ti7Sw6"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

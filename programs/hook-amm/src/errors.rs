@@ -12,4 +12,16 @@ pub enum ErrorCode {
     InsufficientReserves,
     #[msg("Overflow")]
     Overflow,
+    #[msg("Unauthorized mint authority")]
+    UnauthorizedMintAuthority,
+    #[msg("Invalid supply")]
+    InvalidSupply,
+    #[msg("Creator must have all tokens")]
+    CreatorMustHaveAllTokens,
+    #[msg("Curve account not empty")]
+    CurveAccountNotEmpty,
+    #[msg("Virtual reserves too small")]
+    VirtualReservesTooSmall,
+    #[msg("Insufficient balance")]
+    InsufficientBalance,
 }

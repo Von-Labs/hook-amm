@@ -9,7 +9,7 @@ pub mod utils;
 
 use instructions::*;
 
-declare_id!("9rftcX9CMpRaZJUteZ5yyY5bxy2LKSGRfp3xq9uP1SaC");
+declare_id!("2jJUWMa5RFh2FcQowm2cUgGYwAmMiJfFUrJrw6ti7Sw6");
 
 #[program]
 pub mod hook_amm {
@@ -25,6 +25,7 @@ pub mod hook_amm {
     ) -> Result<()> {
         create_bonding_curve_handler(ctx, params)
     }
+
 
     pub fn buy(ctx: Context<Buy>, sol_amount: u64, min_token_amount: u64) -> Result<()> {
         buy_handler(ctx, sol_amount, min_token_amount)
