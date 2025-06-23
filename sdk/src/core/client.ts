@@ -29,7 +29,8 @@ import {
   calculatePriceImpact,
   getTokenProgramId,
   getMintInfo,
-  getTransferHookAccounts
+  getTransferHookAccounts,
+  hasTransferHooks
 } from '../utils';
 
 export class HookAmmClient {
@@ -106,11 +107,11 @@ export class HookAmmClient {
     return tx;
   }
 
-  // Buy tokens with SOL
+  // Buy tokens with SOL (automatically handles transfer hooks)
   async buy(
     params: BuyParams,
     userKeypair: Keypair,
-    additionalHookAccounts: PublicKey[] = []
+    additionalHookAccounts: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] = []
   ): Promise<string> {
     const [globalConfig] = getGlobalConfigPDA();
     const bondingCurveData = await this.getBondingCurve(params.bondingCurve);
@@ -139,6 +140,19 @@ export class HookAmmClient {
       );
     }
 
+    // Automatically get transfer hook accounts
+    const transferHookAccounts = await getTransferHookAccounts(
+      this.connection,
+      bondingCurveData.mint,
+      curveTokenAccount,
+      userTokenAccount,
+      userKeypair.publicKey,
+      BigInt(params.solAmount.toString())
+    );
+
+    // Combine automatic and additional hook accounts
+    const allHookAccounts = [...transferHookAccounts, ...additionalHookAccounts];
+
     const buyInstruction = await this.program.methods
       .buy(params.solAmount, params.minTokenAmount)
       .accounts({
@@ -152,7 +166,7 @@ export class HookAmmClient {
         tokenProgram: tokenProgramId,
         systemProgram: SystemProgram.programId,
       })
-      .remainingAccounts(additionalHookAccounts.map(account => ({ pubkey: account, isSigner: false, isWritable: false })))
+      .remainingAccounts(allHookAccounts)
       .instruction();
 
     instructions.push(buyInstruction);
@@ -164,11 +178,11 @@ export class HookAmmClient {
     return signature;
   }
 
-  // Sell tokens for SOL
+  // Sell tokens for SOL (automatically handles transfer hooks)
   async sell(
     params: SellParams,
     userKeypair: Keypair,
-    additionalHookAccounts: PublicKey[] = []
+    additionalHookAccounts: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] = []
   ): Promise<string> {
     const [globalConfig] = getGlobalConfigPDA();
     const bondingCurveData = await this.getBondingCurve(params.bondingCurve);
@@ -181,6 +195,19 @@ export class HookAmmClient {
       false,
       tokenProgramId
     );
+
+    // Automatically get transfer hook accounts
+    const transferHookAccounts = await getTransferHookAccounts(
+      this.connection,
+      bondingCurveData.mint,
+      userTokenAccount,
+      curveTokenAccount,
+      userKeypair.publicKey,
+      BigInt(params.tokenAmount.toString())
+    );
+
+    // Combine automatic and additional hook accounts
+    const allHookAccounts = [...transferHookAccounts, ...additionalHookAccounts];
 
     const tx = await this.program.methods
       .sell(params.tokenAmount, params.minSolAmount)
@@ -195,7 +222,7 @@ export class HookAmmClient {
         tokenProgram: tokenProgramId,
         systemProgram: SystemProgram.programId,
       })
-      .remainingAccounts(additionalHookAccounts.map(account => ({ pubkey: account, isSigner: false, isWritable: false })))
+      .remainingAccounts(allHookAccounts)
       .signers([userKeypair])
       .rpc();
 
@@ -307,7 +334,7 @@ export class HookAmmClient {
     destination: PublicKey,
     owner: PublicKey,
     amount: BN
-  ): Promise<PublicKey[]> {
+  ): Promise<{ pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[]> {
     return await getTransferHookAccounts(
       this.connection,
       mintAddress,
@@ -316,5 +343,10 @@ export class HookAmmClient {
       owner,
       BigInt(amount.toString())
     );
+  }
+
+  // Check if a token has transfer hooks
+  async isTokenWithHooks(mintAddress: PublicKey): Promise<boolean> {
+    return await hasTransferHooks(this.connection, mintAddress);
   }
 }

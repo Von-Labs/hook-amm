@@ -1,14 +1,23 @@
 # Hook AMM SDK
 
-TypeScript SDK for interacting with the Hook AMM program - a Solana AMM with Token-2022 transfer hook support.
+TypeScript SDK for interacting with the Hook AMM program - a Solana AMM with **automatic Token-2022 transfer hook support**.
 
-## Features
+## 🚀 Features
 
 - 🔄 **Constant Product AMM**: Automated market making with bonding curves
-- 🪝 **Token-2022 Hooks**: Full support for transfer hooks
+- 🪝 **Automatic Transfer Hooks**: Zero-config Token-2022 transfer hook handling
+- ⚡ **Smart Detection**: Automatically detects and handles different token types
 - 📊 **Price Quotes**: Get accurate price quotes before trading
 - 🧮 **Math Utilities**: Built-in calculations for reserves, prices, and slippage
 - 🔐 **Type Safety**: Full TypeScript support with comprehensive types
+- 🛡️ **Error Handling**: Comprehensive error handling for hook-related issues
+
+## ✨ What's New in v0.2.0
+
+- 🪝 **Automatic Transfer Hook Handling**: No more manual hook account management!
+- 🔍 **Hook Detection**: `isTokenWithHooks()` to check token capabilities
+- 🔧 **Better Account Resolution**: Automatic PDA resolution for hook accounts
+- 📖 **Complete Examples**: Full transfer hook integration examples
 
 ## Installation
 
@@ -34,6 +43,10 @@ const programIdl = { /* your program IDL */ };
 // Create client
 const client = new HookAmmClient(connection, wallet, programIdl);
 
+// 🪝 Check if token has transfer hooks (automatic detection!)
+const hasHooks = await client.isTokenWithHooks(tokenMint);
+console.log(`Token has transfer hooks: ${hasHooks}`);
+
 // Get a price quote
 const quote = await client.getBuyQuote(
   bondingCurvePubkey,
@@ -44,6 +57,16 @@ console.log(`Price: ${quote.pricePerToken} SOL per token`);
 console.log(`You'll receive: ${quote.tokenAmount.toString()} tokens`);
 console.log(`Fee: ${quote.fee.toString()} lamports`);
 console.log(`Price impact: ${quote.priceImpact}%`);
+
+// 🚀 Buy tokens (automatically handles transfer hooks!)
+const buyParams = {
+  bondingCurve: bondingCurvePubkey,
+  solAmount: new BN(1000000000),
+  minTokenAmount: quote.tokenAmount.mul(new BN(95)).div(new BN(100)) // 5% slippage
+};
+
+const signature = await client.buy(buyParams, userKeypair);
+// ✅ Transfer hooks handled automatically - no additional configuration needed!
 ```
 
 ## API Reference
@@ -63,11 +86,11 @@ new HookAmmClient(connection: Connection, wallet: Wallet, programIdl: Idl)
 ##### Trading Operations
 
 ```typescript
-// Buy tokens with SOL
-async buy(params: BuyParams, userKeypair: Keypair, hookAccounts?: PublicKey[]): Promise<string>
+// Buy tokens with SOL (automatically handles transfer hooks)
+async buy(params: BuyParams, userKeypair: Keypair, additionalHookAccounts?: HookAccount[]): Promise<string>
 
-// Sell tokens for SOL  
-async sell(params: SellParams, userKeypair: Keypair, hookAccounts?: PublicKey[]): Promise<string>
+// Sell tokens for SOL (automatically handles transfer hooks)
+async sell(params: SellParams, userKeypair: Keypair, additionalHookAccounts?: HookAccount[]): Promise<string>
 
 // Get buy quote
 async getBuyQuote(bondingCurve: PublicKey, solAmount: BN): Promise<PriceQuote>
@@ -102,17 +125,27 @@ async initializeGlobalConfig(authority: PublicKey, feeRecipient: PublicKey, auth
 async getGlobalConfig(): Promise<GlobalConfig>
 ```
 
-##### Token-2022 Hook Support
+##### Token-2022 Hook Support (New in v0.2.0!)
 
 ```typescript
-// Get transfer hook accounts
+// Check if token has transfer hooks
+async isTokenWithHooks(mintAddress: PublicKey): Promise<boolean>
+
+// Get transfer hook accounts with full metadata
 async getTransferHookAccountsForTrade(
   mintAddress: PublicKey,
   source: PublicKey, 
   destination: PublicKey,
   owner: PublicKey,
   amount: BN
-): Promise<PublicKey[]>
+): Promise<HookAccount[]>
+
+// Type for hook accounts
+interface HookAccount {
+  pubkey: PublicKey;
+  isSigner: boolean;
+  isWritable: boolean;
+}
 ```
 
 ### Types
@@ -212,7 +245,7 @@ const priceInSol = calculateTokenPrice(
 #### Token Utilities
 
 ```typescript
-import { getTokenProgramId, getMintInfo, isToken2022 } from '@hook-amm/sdk';
+import { getTokenProgramId, getMintInfo, isToken2022, hasTransferHooks } from '@hook-amm/sdk';
 
 // Detect token program
 const tokenProgramId = await getTokenProgramId(connection, mintAddress);
@@ -222,14 +255,33 @@ const mintInfo = await getMintInfo(connection, mintAddress);
 
 // Check if Token-2022
 const isT22 = isToken2022(mintAccountInfo);
+
+// Check if token has transfer hooks (new in v0.2.0!)
+const hasHooks = await hasTransferHooks(connection, mintAddress);
 ```
 
-## Token-2022 Hook Support
+## 🪝 Token-2022 Transfer Hook Support
 
-The SDK automatically handles Token-2022 transfer hooks:
+**The SDK automatically handles Token-2022 transfer hooks** - no configuration required!
+
+### Automatic Mode (Recommended)
 
 ```typescript
-// For Token-2022 tokens with hooks, get required accounts
+// ✅ Zero configuration - SDK automatically handles everything
+await client.buy(buyParams, userKeypair);
+await client.sell(sellParams, userKeypair);
+
+// The SDK automatically:
+// 1. Detects if token has transfer hooks
+// 2. Resolves hook program accounts
+// 3. Includes required accounts in transaction
+// 4. Handles hook-specific PDAs and meta accounts
+```
+
+### Manual Mode (Advanced)
+
+```typescript
+// 🔧 Manual control for advanced use cases
 const hookAccounts = await client.getTransferHookAccountsForTrade(
   tokenMint,
   sourceAccount,
@@ -238,9 +290,24 @@ const hookAccounts = await client.getTransferHookAccountsForTrade(
   amount
 );
 
-// Pass hook accounts to buy/sell operations
-await client.buy(buyParams, userKeypair, hookAccounts);
-await client.sell(sellParams, userKeypair, hookAccounts);
+// Add additional custom hook accounts if needed
+const customAccounts = [
+  { pubkey: customPDA, isSigner: false, isWritable: true }
+];
+
+await client.buy(buyParams, userKeypair, [...hookAccounts, ...customAccounts]);
+```
+
+### Hook Detection
+
+```typescript
+// Check if token supports transfer hooks
+const hasHooks = await client.isTokenWithHooks(tokenMint);
+if (hasHooks) {
+  console.log('🪝 This token uses transfer hooks - handled automatically!');
+} else {
+  console.log('📄 Standard token - no hooks needed');
+}
 ```
 
 ## Examples
