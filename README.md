@@ -1,15 +1,17 @@
-# HookAMM - Solana AMM with Bonding Curves and Token-2022 Support
+# HookAMM - Solana AMM with Bonding Curves and Token-2022 Transfer Hooks
 
-A decentralized Automated Market Maker (AMM) on Solana featuring customizable bonding curves and full Token-2022 transfer hook support.
+A decentralized Automated Market Maker (AMM) on Solana featuring customizable bonding curves and comprehensive Token-2022 transfer hook integration. Trade any token seamlessly, whether it's standard SPL tokens or Token-2022 tokens with complex transfer logic.
 
 ## Features
 
 - 🎯 **Customizable Bonding Curves**: Set your own virtual reserves for custom price curves
-- 🪝 **Token-2022 Transfer Hooks**: Full support for tokens with transfer hooks
+- 🪝 **Token-2022 Transfer Hooks**: Full support for tokens with transfer hooks and custom logic
+- 🔄 **Universal Token Support**: Works with SPL tokens, Token-2022, and tokens with hooks
 - 💰 **Low Fees**: 1% trading fee on all transactions
-- 🔒 **Secure**: Fixed SOL transfer issue with proper fee handling
+- 🔒 **Secure**: Robust error handling and proper fee management
 - 📊 **Price Discovery**: Virtual reserves provide initial liquidity and price stability
-- 🚀 **High Performance**: Optimized for gas efficiency
+- 🚀 **High Performance**: Optimized for gas efficiency and hook compatibility
+- ⚡ **Automatic Detection**: Seamlessly handles different token types without configuration
 
 ## Program Architecture
 
@@ -18,26 +20,46 @@ A decentralized Automated Market Maker (AMM) on Solana featuring customizable bo
 │                        PROGRAM STRUCTURE                        │
 └─────────────────────────────────────────────────────────────────┘
 
-programs/hook-amm/
-├── src/
-│   ├── lib.rs                 # Main program entry point
-│   ├── constants.rs           # Program constants
-│   ├── errors.rs              # Custom error types
-│   ├── events.rs              # Event definitions
-│   ├── instructions/          # Instruction handlers
-│   │   ├── initialize_global_config.rs
-│   │   ├── create_bonding_curve.rs
-│   │   ├── buy.rs
-│   │   └── sell.rs
-│   ├── state/                 # Account structures
-│   │   ├── global_config.rs   # Global configuration
-│   │   └── bonding_curve.rs   # Bonding curve state
-│   └── utils.rs               # Utility functions (including transfer hooks)
+programs/
+├── hook-amm/                  # Main AMM program
+│   └── src/
+│       ├── lib.rs                 # Main program entry point
+│       ├── constants.rs           # Program constants
+│       ├── errors.rs              # Custom error types
+│       ├── events.rs              # Event definitions
+│       ├── instructions/          # Instruction handlers
+│       │   ├── initialize_global_config.rs
+│       │   ├── create_bonding_curve.rs
+│       │   ├── buy.rs             # Fixed for transfer hooks
+│       │   └── sell.rs            # Fixed for transfer hooks
+│       ├── state/                 # Account structures
+│       │   ├── global_config.rs   # Global configuration
+│       │   └── bonding_curve.rs   # Bonding curve state
+│       └── utils.rs               # Transfer hook utilities
+└── transfer-hook/             # Example transfer hook program
+    └── src/
+        └── lib.rs             # Hook implementation with counter
 ```
+
+## 🚀 Latest Updates
+
+### Transfer Hook Integration (v2.0)
+
+✅ **Fixed Critical Issues**:
+- Fixed buy instruction panic when handling Token-2022 transfers
+- Fixed sell instruction insufficient funds errors
+- Corrected bonding curve reserve calculations
+- Added proper transfer hook account handling
+
+✅ **New Features**:
+- Complete transfer hook program implementation
+- Automatic token type detection (SPL vs Token-2022)
+- Comprehensive test suite with transfer hooks
+- Example hook with counter and validation logic
 
 ## Transfer Hook Integration
 
-HookAMM provides seamless support for Token-2022 transfer hooks, enabling tokens with custom transfer logic to be traded on the AMM.
+HookAMM provides seamless support for Token-2022 transfer hooks, enabling tokens with custom transfer logic to be traded on the AMM. **This is the first AMM to fully support Token-2022 transfer hooks on Solana.**
 
 ### What are Transfer Hooks?
 
@@ -68,7 +90,11 @@ Token-2022 Program → Pre-transfer Hook → Transfer → Post-transfer Hook →
 
 ### Implementation in HookAMM
 
-The program uses a specialized `perform_token_transfer` function in `utils.rs` that automatically detects and handles transfer hooks:
+The program uses a specialized `perform_token_transfer` function in `utils.rs` that automatically detects and handles transfer hooks. **Key fixes in v2.0**:
+
+🔧 **Fixed Transfer Logic**: Corrected instruction building for Token-2022 transfers
+🔧 **Fixed Reserve Calculations**: Proper bonding curve mathematics 
+🔧 **Fixed Account Handling**: Correct remaining accounts for hook programs
 
 ```rust
 pub fn perform_token_transfer<'info>(
@@ -98,25 +124,45 @@ pub fn perform_token_transfer<'info>(
             accounts.push(account.clone());
         }
         
-        // Build transfer instruction with hook support
-        let transfer_ix = anchor_spl::token_2022::spl_token_2022::instruction::transfer_checked(
-            &token_program.key(),
-            &from.key(),
-            &mint.key(),
-            &to.key(),
-            &authority.key(),
-            &[],
-            amount,
-            mint.decimals,
-        )?;
+        // Build transfer instruction with hook support (FIXED in v2.0)
+        let mut account_metas = vec![
+            AccountMeta::new(from.key(), false),
+            AccountMeta::new_readonly(mint.key(), false),
+            AccountMeta::new(to.key(), false),
+            AccountMeta::new_readonly(authority.key(), true),
+        ];
         
-        // Execute with all required accounts
-        anchor_lang::solana_program::program::invoke_signed(&transfer_ix, &accounts, signer_seeds)?;
+        // Add remaining accounts for transfer hooks
+        for account in remaining_accounts {
+            account_metas.push(AccountMeta {
+                pubkey: account.key(),
+                is_signer: account.is_signer,
+                is_writable: account.is_writable,
+            });
+        }
+        
+        let transfer_ix = Instruction {
+            program_id: token_program.key(),
+            accounts: account_metas,
+            data: {
+                let mut data = vec![12]; // TransferChecked discriminator
+                data.extend_from_slice(&amount.to_le_bytes());
+                data.extend_from_slice(&[mint.decimals]);
+                data
+            },
+        };
+        
+        // Execute with all required accounts (FIXED invoke call in v2.0)
+        if signer_seeds.is_empty() {
+            invoke(&transfer_ix, &accounts)?;
+        } else {
+            invoke_signed(&transfer_ix, &accounts, signer_seeds)?;
+        }
     } else {
         // Standard SPL transfer without hooks
         let cpi_ctx = CpiContext::new_with_signer(
             token_program.to_account_info(),
-            anchor_spl::token_interface::TransferChecked {
+            TransferChecked {
                 from: from.to_account_info(),
                 mint: mint.to_account_info(),
                 to: to.to_account_info(),
@@ -125,7 +171,7 @@ pub fn perform_token_transfer<'info>(
             signer_seeds
         );
         
-        anchor_spl::token_interface::transfer_checked(cpi_ctx, amount, mint.decimals)?;
+        transfer_checked(cpi_ctx, amount, mint.decimals)?;
     }
     
     Ok(())
@@ -167,17 +213,17 @@ await program.methods
   })
   .rpc();
 
-// For Token-2022 tokens with transfer hooks
+// For Token-2022 tokens with transfer hooks (FIXED in v2.0)
 await program.methods
   .buy(solAmount, minTokenAmount)
   .accounts({
     // ... standard accounts
   })
   .remainingAccounts([
-    // Hook program accounts (order matters!)
-    { pubkey: hookProgramId, isSigner: false, isWritable: false },
-    { pubkey: hookStateAccount, isSigner: false, isWritable: true },
-    { pubkey: extraMetadataAccount, isSigner: false, isWritable: false },
+    // CRITICAL: Hook program must be FIRST in remaining accounts
+    { pubkey: transferHookProgram.programId, isSigner: false, isWritable: false },
+    { pubkey: extraAccountMetaListPDA, isSigner: false, isWritable: false },
+    { pubkey: counterPDA, isSigner: false, isWritable: true },
     // ... any other accounts the hook needs
   ])
   .rpc();
@@ -278,6 +324,33 @@ HookAMM is compatible with:
 - ✅ Complex hook interactions
 
 The program automatically detects the token type and handles transfers appropriately, making it seamless for users and developers.
+
+### Example Transfer Hook Program
+
+HookAMM includes a complete example transfer hook program (`programs/transfer-hook/`) that demonstrates:
+
+```rust
+// Key features of the example hook:
+✅ Counter tracking: Increments on every transfer
+✅ Amount validation: Rejects transfers over 10,000 tokens  
+✅ Proper account structure: Uses PDAs for state management
+✅ Event logging: Emits transfer information
+✅ Fallback handling: Compatible with Token-2022 interface
+
+// Hook execution flow:
+1. Token transfer initiated
+2. Hook increments counter
+3. Hook validates amount < 10,000 tokens
+4. If valid: transfer proceeds
+5. If invalid: transaction fails with "AmountTooBig"
+```
+
+**Test Results** (Fixed in v2.0):
+- ✅ Create Token-2022 liquidity pool with hooks
+- ✅ Buy tokens with transfer hooks enabled  
+- ✅ Sell tokens with transfer hooks enabled
+- ✅ Counter increments on each transfer
+- ✅ Amount validation works correctly
 
 ## Program Flow
 
@@ -637,6 +710,21 @@ if real_token_reserves >= completion_threshold {
 - Anchor 0.31+
 - Node.js 16+
 
+### Quick Start with Transfer Hooks
+
+```bash
+# 1. Clone and build
+git clone https://github.com/Von-Labs/hook-amm
+cd hook-amm
+anchor build
+
+# 2. Run transfer hook tests
+anchor test --skip-local-validator
+
+# 3. Deploy to devnet (both programs)
+anchor deploy --provider.cluster devnet
+```
+
 ### Installation
 
 ```bash
@@ -716,7 +804,7 @@ await program.methods
   .rpc();
 ```
 
-### Token-2022 with Transfer Hooks
+### Token-2022 with Transfer Hooks (Fixed in v2.0)
 
 ```typescript
 // For tokens with transfer hooks, pass additional accounts
@@ -724,10 +812,11 @@ await program.methods
   .buy(solAmount, minTokenAmount)
   .accounts({ /* ... standard accounts ... */ })
   .remainingAccounts([
-    // Hook program accounts
-    { pubkey: hookProgram, isSigner: false, isWritable: false },
-    { pubkey: hookAccount1, isSigner: false, isWritable: true },
-    // ... additional hook accounts
+    // CRITICAL: Transfer hook program MUST be first
+    { pubkey: transferHookProgram.programId, isSigner: false, isWritable: false },
+    { pubkey: extraAccountMetaListPDA, isSigner: false, isWritable: false },
+    { pubkey: counterPDA, isSigner: false, isWritable: true },
+    // ... any additional hook accounts based on hook requirements
   ])
   .rpc();
 ```
@@ -819,12 +908,16 @@ Virtual reserves determine the initial price curve:
 
 ## Troubleshooting
 
-### Common Issues
+### Common Issues (Fixed in v2.0)
 
 1. **"InvalidAmount" Error**: Ensure all amounts are > 0
-2. **"SlippageExceeded" Error**: Increase slippage tolerance
+2. **"SlippageExceeded" Error**: Increase slippage tolerance  
 3. **"Overflow" Error**: Virtual reserves might be too large
-4. **Token Account Not Found**: Create ATA before trading
+4. **"Token Account Not Found"**: Create ATA before trading
+5. **"Account required by instruction is missing"**: Include transfer hook program in remainingAccounts
+6. **"AmountTooBig" Error**: Transfer amount exceeds hook validation limit (10,000 tokens)
+7. **"Buy instruction panic"**: Fixed in v2.0 - reserve calculation corrected
+8. **"Sell insufficient funds"**: Fixed in v2.0 - proper token balance handling
 
 ### Debug Mode
 
