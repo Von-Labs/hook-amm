@@ -5,16 +5,22 @@ package_manager = "yarn"
 resolution = true
 skip-lint = false
 
-[programs.localnet]
-hook_amm = "3knogLoPGGJJkda28BjN5N2LCcmEmoyyrua9THojndQr"
 [programs.devnet]
-hook_amm = "3knogLoPGGJJkda28BjN5N2LCcmEmoyyrua9THojndQr"
+hook_amm = "gQJapJpSreNmTsTNT51qHC7oTJTA6JE5hJqYNiR214F"
+transfer_hook = "4gq4iwtDaccBtbZe6AL4fyemKt1sit26FDKHPREXa9sT"
+
+[programs.localnet]
+hook_amm = "gQJapJpSreNmTsTNT51qHC7oTJTA6JE5hJqYNiR214F"
+transfer_hook = "4gq4iwtDaccBtbZe6AL4fyemKt1sit26FDKHPREXa9sT"
+
+[workspace]
+members = ["programs/hook-amm", "programs/transfer-hook"]
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

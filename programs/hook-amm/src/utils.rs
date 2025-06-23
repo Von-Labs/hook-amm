@@ -84,17 +84,33 @@ pub fn perform_token_transfer<'info>(
             accounts.push(account.clone());
         }
         
-        // Build transfer instruction with hook support
-        let transfer_ix = anchor_spl::token_2022::spl_token_2022::instruction::transfer_checked(
-            &token_program.key(),
-            &from.key(),
-            &mint.key(),
-            &to.key(),
-            &authority.key(),
-            &[],
-            amount,
-            mint.decimals,
-        )?;
+        // Build transfer instruction with hook support  
+        let mut account_metas = vec![
+            anchor_lang::solana_program::instruction::AccountMeta::new(from.key(), false),
+            anchor_lang::solana_program::instruction::AccountMeta::new_readonly(mint.key(), false),
+            anchor_lang::solana_program::instruction::AccountMeta::new(to.key(), false),
+            anchor_lang::solana_program::instruction::AccountMeta::new_readonly(authority.key(), true),
+        ];
+        
+        // Add remaining accounts for transfer hooks
+        for account in remaining_accounts {
+            account_metas.push(anchor_lang::solana_program::instruction::AccountMeta {
+                pubkey: account.key(),
+                is_signer: account.is_signer,
+                is_writable: account.is_writable,
+            });
+        }
+        
+        let transfer_ix = anchor_lang::solana_program::instruction::Instruction {
+            program_id: token_program.key(),
+            accounts: account_metas,
+            data: {
+                let mut data = vec![12]; // TransferChecked instruction discriminator
+                data.extend_from_slice(&amount.to_le_bytes());
+                data.extend_from_slice(&[mint.decimals]);
+                data
+            },
+        };
         
         if signer_seeds.is_empty() {
             anchor_lang::solana_program::program::invoke(&transfer_ix, &accounts)?;
