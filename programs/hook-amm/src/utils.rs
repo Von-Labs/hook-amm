@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 use anchor_spl::token_2022;
 use crate::errors::ErrorCode;
 
@@ -58,12 +57,13 @@ pub fn calculate_sell_amount(
 }
 
 pub fn perform_token_transfer<'info>(
-    from: &InterfaceAccount<'info, TokenAccount>,
-    to: &InterfaceAccount<'info, TokenAccount>,
+    from: &AccountInfo<'info>,
+    to: &AccountInfo<'info>,
     authority: &AccountInfo<'info>,
-    token_program: &Interface<'info, TokenInterface>,
-    mint: &InterfaceAccount<'info, Mint>,
+    token_program: &AccountInfo<'info>,
+    mint: &AccountInfo<'info>,
     amount: u64,
+    decimals: u8,
     signer_seeds: &[&[&[u8]]],
     remaining_accounts: &[AccountInfo<'info>],
 ) -> Result<()> {
@@ -73,10 +73,10 @@ pub fn perform_token_transfer<'info>(
     if is_token_2022 && !remaining_accounts.is_empty() {
         // Token-2022 with potential transfer hooks
         let mut accounts = vec![
-            from.to_account_info(),
-            mint.to_account_info(),
-            to.to_account_info(),
-            authority.to_account_info(),
+            from.clone(),
+            mint.clone(),
+            to.clone(),
+            authority.clone(),
         ];
         
         // Add hook accounts from remaining_accounts
@@ -93,7 +93,7 @@ pub fn perform_token_transfer<'info>(
             &authority.key(),
             &[],
             amount,
-            mint.decimals,
+            decimals,
         )?;
         
         if signer_seeds.is_empty() {
@@ -104,20 +104,20 @@ pub fn perform_token_transfer<'info>(
     } else {
         // Regular transfer without hooks
         let cpi_accounts = anchor_spl::token_interface::TransferChecked {
-            from: from.to_account_info(),
-            mint: mint.to_account_info(),
-            to: to.to_account_info(),
-            authority: authority.to_account_info(),
+            from: from.clone(),
+            mint: mint.clone(),
+            to: to.clone(),
+            authority: authority.clone(),
         };
         
-        let cpi_program = token_program.to_account_info();
+        let cpi_program = token_program.clone();
         let cpi_ctx = if signer_seeds.is_empty() {
             CpiContext::new(cpi_program, cpi_accounts)
         } else {
             CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds)
         };
         
-        anchor_spl::token_interface::transfer_checked(cpi_ctx, amount, mint.decimals)?;
+        anchor_spl::token_interface::transfer_checked(cpi_ctx, amount, decimals)?;
     }
     
     Ok(())

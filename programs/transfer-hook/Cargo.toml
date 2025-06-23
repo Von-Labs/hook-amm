@@ -1,12 +1,12 @@
 [package]
-name = "hook-amm"
+name = "anchor-t22-transfer-hook"
 version = "0.1.0"
 description = "Created with Anchor"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "hook_amm"
+name = "anchor_t22_transfer_hook"
 
 [features]
 default = []
@@ -15,12 +15,16 @@ no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
-
+test-sbf = []
 
 [dependencies]
-anchor-lang = { version = "0.31.1", features = ["init-if-needed"]}
-anchor-spl = { version = "0.31.1", features = ["metadata", "token_2022_extensions"]}
-spl-token-2022 = { version = "3.0.0", features = ["no-entrypoint"] }
+anchor-lang = { version = "0.31.1", features = ["interface-instructions", "init-if-needed"] }
+anchor-spl = "0.31.1"
+spl-tlv-account-resolution = "0.6.3"
+spl-transfer-hook-interface = "0.6.3"
+
+[dev-dependencies]
+solana-program = "~2.1"
 
 [profile.release]
 overflow-checks = true

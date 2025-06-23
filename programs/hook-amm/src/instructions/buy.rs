@@ -55,22 +55,29 @@ pub struct Buy<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn buy_handler(ctx: Context<Buy>, sol_amount: u64, min_token_amount: u64) -> Result<()> {
+pub fn buy_handler<'info>(ctx: Context<'_, '_, '_, 'info, Buy<'info>>, sol_amount: u64, min_token_amount: u64) -> Result<()> {
     require!(sol_amount > 0, ErrorCode::InvalidAmount);
     require!(!ctx.accounts.bonding_curve.complete, ErrorCode::CurveComplete);
     
     // Calculate output amount using constant product formula
     let fee_amount = sol_amount
         .checked_mul(FEE_BASIS_POINTS as u64)
-        .unwrap()
+        .ok_or(ErrorCode::Overflow)?
         .checked_div(10000)
-        .unwrap();
-    let sol_amount_after_fee = sol_amount.checked_sub(fee_amount).unwrap();
+        .ok_or(ErrorCode::Overflow)?;
+    
+    let sol_amount_after_fee = sol_amount
+        .checked_sub(fee_amount)
+        .ok_or(ErrorCode::Overflow)?;
     
     let token_amount = calculate_buy_amount(
         sol_amount_after_fee,
-        ctx.accounts.bonding_curve.virtual_sol_reserves + ctx.accounts.bonding_curve.real_sol_reserves,
-        ctx.accounts.bonding_curve.virtual_token_reserves - ctx.accounts.bonding_curve.real_token_reserves,
+        ctx.accounts.bonding_curve.virtual_sol_reserves
+            .checked_add(ctx.accounts.bonding_curve.real_sol_reserves)
+            .ok_or(ErrorCode::Overflow)?,
+        ctx.accounts.bonding_curve.virtual_token_reserves
+            .checked_sub(ctx.accounts.bonding_curve.real_token_reserves)
+            .ok_or(ErrorCode::InsufficientReserves)?,
     )?;
     
     require!(token_amount >= min_token_amount, ErrorCode::SlippageExceeded);
@@ -78,10 +85,10 @@ pub fn buy_handler(ctx: Context<Buy>, sol_amount: u64, min_token_amount: u64) ->
     // Update reserves
     ctx.accounts.bonding_curve.real_sol_reserves = ctx.accounts.bonding_curve.real_sol_reserves
         .checked_add(sol_amount_after_fee)
-        .unwrap();
+        .ok_or(ErrorCode::Overflow)?;
     ctx.accounts.bonding_curve.real_token_reserves = ctx.accounts.bonding_curve.real_token_reserves
         .checked_sub(token_amount)
-        .unwrap();
+        .ok_or(ErrorCode::InsufficientReserves)?;
     
     // Transfer SOL from buyer to curve (only the amount after fee)
     let sol_transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
@@ -115,36 +122,68 @@ pub fn buy_handler(ctx: Context<Buy>, sol_amount: u64, min_token_amount: u64) ->
         )?;
     }
     
-    // Transfer tokens from curve to buyer
-    let cpi_accounts = anchor_spl::token_interface::TransferChecked {
-        from: ctx.accounts.curve_token_account.to_account_info(),
-        mint: ctx.accounts.mint.to_account_info(),
-        to: ctx.accounts.user_token_account.to_account_info(),
-        authority: ctx.accounts.bonding_curve.to_account_info(),
-    };
-    
-    // Set up seeds with proper lifetimes
+    // Transfer tokens from curve to user
     let bonding_curve_seed = BONDING_CURVE_SEED;
     let mint_key = ctx.accounts.mint.key();
     let bump = ctx.bumps.bonding_curve;
 
-    // Create the seeds array with the correct lifetime
     let signer_seeds = &[
         bonding_curve_seed,
         mint_key.as_ref(),
         &[bump],
     ];
-
-    // Create a reference to the seeds array with the right structure for CPI
     let signers = &[&signer_seeds[..]];
     
-    let cpi_ctx = CpiContext::new_with_signer(
-        ctx.accounts.token_program.to_account_info(),
-        cpi_accounts,
-        signers
-    );
+    // Check if this is Token-2022 with transfer hooks
+    let is_token_2022 = ctx.accounts.token_program.key() == anchor_spl::token_2022::ID;
     
-    anchor_spl::token_interface::transfer_checked(cpi_ctx, token_amount, ctx.accounts.mint.decimals)?;
+    if is_token_2022 && !ctx.remaining_accounts.is_empty() {
+        // Handle Token-2022 with transfer hooks using raw instruction
+        let transfer_ix = anchor_spl::token_2022::spl_token_2022::instruction::transfer_checked(
+            &ctx.accounts.token_program.key(),
+            &ctx.accounts.curve_token_account.key(),
+            &ctx.accounts.mint.key(),
+            &ctx.accounts.user_token_account.key(),
+            &ctx.accounts.bonding_curve.key(),
+            &[],
+            token_amount,
+            ctx.accounts.mint.decimals,
+        )?;
+        
+        let mut account_infos = vec![
+            ctx.accounts.curve_token_account.to_account_info(),
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.user_token_account.to_account_info(),
+            ctx.accounts.bonding_curve.to_account_info(),
+        ];
+        
+        // Add remaining accounts for transfer hooks
+        for account in ctx.remaining_accounts {
+            account_infos.push(account.clone());
+        }
+        
+        anchor_lang::solana_program::program::invoke_signed(
+            &transfer_ix,
+            &account_infos,
+            signers,
+        )?;
+    } else {
+        // Regular token transfer without hooks
+        let cpi_accounts = anchor_spl::token_interface::TransferChecked {
+            from: ctx.accounts.curve_token_account.to_account_info(),
+            mint: ctx.accounts.mint.to_account_info(),
+            to: ctx.accounts.user_token_account.to_account_info(),
+            authority: ctx.accounts.bonding_curve.to_account_info(),
+        };
+        
+        let cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            cpi_accounts,
+            signers
+        );
+        
+        anchor_spl::token_interface::transfer_checked(cpi_ctx, token_amount, ctx.accounts.mint.decimals)?;
+    }
     
     emit!(TradeEvent {
         mint: ctx.accounts.mint.key(),
@@ -152,8 +191,12 @@ pub fn buy_handler(ctx: Context<Buy>, sol_amount: u64, min_token_amount: u64) ->
         sol_amount,
         token_amount,
         is_buy: true,
-        virtual_sol_reserves: ctx.accounts.bonding_curve.virtual_sol_reserves + ctx.accounts.bonding_curve.real_sol_reserves,
-        virtual_token_reserves: ctx.accounts.bonding_curve.virtual_token_reserves - ctx.accounts.bonding_curve.real_token_reserves,
+        virtual_sol_reserves: ctx.accounts.bonding_curve.virtual_sol_reserves
+            .checked_add(ctx.accounts.bonding_curve.real_sol_reserves)
+            .ok_or(ErrorCode::Overflow)?,
+        virtual_token_reserves: ctx.accounts.bonding_curve.virtual_token_reserves
+            .checked_sub(ctx.accounts.bonding_curve.real_token_reserves)
+            .ok_or(ErrorCode::InsufficientReserves)?,
     });
     
     Ok(())
