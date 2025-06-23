@@ -255,17 +255,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "anchor-t22-transfer-hook"
-version = "0.1.0"
-dependencies = [
- "anchor-lang",
- "anchor-spl",
- "solana-program",
- "spl-tlv-account-resolution 0.6.4",
- "spl-transfer-hook-interface 0.6.4",
-]
-
-[[package]]
 name = "anyhow"
 version = "1.0.98"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2996,6 +2985,17 @@ name = "toml_write"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
+
+[[package]]
+name = "transfer-hook"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "anchor-spl",
+ "solana-program",
+ "spl-tlv-account-resolution 0.6.4",
+ "spl-transfer-hook-interface 0.6.4",
+]
 
 [[package]]
 name = "typenum"

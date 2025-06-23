@@ -66,7 +66,7 @@ pub fn sell_handler<'info>(
     // Calculate output amount using constant product formula
     let sol_amount = calculate_sell_amount(
         token_amount,
-        ctx.accounts.bonding_curve.virtual_token_reserves - ctx.accounts.bonding_curve.real_token_reserves,
+        ctx.accounts.bonding_curve.virtual_token_reserves + ctx.accounts.bonding_curve.token_total_supply - ctx.accounts.bonding_curve.real_token_reserves,
         ctx.accounts.bonding_curve.virtual_sol_reserves + ctx.accounts.bonding_curve.real_sol_reserves,
     )?;
     
@@ -91,7 +91,7 @@ pub fn sell_handler<'info>(
         ctx.remaining_accounts,
     )?;
     
-    // Update reserves
+    // Update reserves - for sell: SOL decreases, tokens increase (tokens are returned to pool)
     ctx.accounts.bonding_curve.real_sol_reserves = ctx.accounts.bonding_curve.real_sol_reserves
         .checked_sub(sol_amount)
         .unwrap();
@@ -116,7 +116,7 @@ pub fn sell_handler<'info>(
         token_amount,
         is_buy: false,
         virtual_sol_reserves: ctx.accounts.bonding_curve.virtual_sol_reserves + ctx.accounts.bonding_curve.real_sol_reserves,
-        virtual_token_reserves: ctx.accounts.bonding_curve.virtual_token_reserves - ctx.accounts.bonding_curve.real_token_reserves,
+        virtual_token_reserves: ctx.accounts.bonding_curve.virtual_token_reserves + ctx.accounts.bonding_curve.token_total_supply - ctx.accounts.bonding_curve.real_token_reserves,
     });
     
     Ok(())

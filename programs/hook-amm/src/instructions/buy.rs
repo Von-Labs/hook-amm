@@ -74,17 +74,17 @@ pub fn buy_handler<'info>(
     let token_amount = calculate_buy_amount(
         sol_amount_after_fee,
         ctx.accounts.bonding_curve.virtual_sol_reserves + ctx.accounts.bonding_curve.real_sol_reserves,
-        ctx.accounts.bonding_curve.virtual_token_reserves - ctx.accounts.bonding_curve.real_token_reserves,
+        ctx.accounts.bonding_curve.virtual_token_reserves + ctx.accounts.bonding_curve.token_total_supply - ctx.accounts.bonding_curve.real_token_reserves,
     )?;
     
     require!(token_amount >= min_token_amount, ErrorCode::SlippageExceeded);
     
-    // Update reserves
+    // Update reserves - for buy: SOL increases, tokens decrease (but real_token_reserves tracks tokens taken OUT)
     ctx.accounts.bonding_curve.real_sol_reserves = ctx.accounts.bonding_curve.real_sol_reserves
         .checked_add(sol_amount_after_fee)
         .unwrap();
     ctx.accounts.bonding_curve.real_token_reserves = ctx.accounts.bonding_curve.real_token_reserves
-        .checked_sub(token_amount)
+        .checked_add(token_amount)
         .unwrap();
     
     // Transfer SOL from buyer to curve (only the amount after fee)
@@ -148,7 +148,7 @@ pub fn buy_handler<'info>(
         token_amount,
         is_buy: true,
         virtual_sol_reserves: ctx.accounts.bonding_curve.virtual_sol_reserves + ctx.accounts.bonding_curve.real_sol_reserves,
-        virtual_token_reserves: ctx.accounts.bonding_curve.virtual_token_reserves - ctx.accounts.bonding_curve.real_token_reserves,
+        virtual_token_reserves: ctx.accounts.bonding_curve.virtual_token_reserves + ctx.accounts.bonding_curve.token_total_supply - ctx.accounts.bonding_curve.real_token_reserves,
     });
     
     Ok(())

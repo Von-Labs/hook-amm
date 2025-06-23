@@ -288,6 +288,11 @@ describe("Token-2022 AMM with Transfer Hooks", () => {
             })
             .remainingAccounts([
                 {
+                    pubkey: transferHookProgram.programId,
+                    isSigner: false,
+                    isWritable: false,
+                },
+                {
                     pubkey: extraAccountMetaListPDA,
                     isSigner: false,
                     isWritable: false,
@@ -354,6 +359,11 @@ describe("Token-2022 AMM with Transfer Hooks", () => {
                 rent: anchor.web3.SYSVAR_RENT_PUBKEY,
             })
             .remainingAccounts([
+                {
+                    pubkey: transferHookProgram.programId,
+                    isSigner: false,
+                    isWritable: false,
+                },
                 {
                     pubkey: extraAccountMetaListPDA,
                     isSigner: false,
@@ -437,6 +447,11 @@ describe("Token-2022 AMM with Transfer Hooks", () => {
                 rent: anchor.web3.SYSVAR_RENT_PUBKEY,
             })
             .remainingAccounts([
+                {
+                    pubkey: transferHookProgram.programId,
+                    isSigner: false,
+                    isWritable: false,
+                },
                 {
                     pubkey: extraAccountMetaListPDA,
                     isSigner: false,
