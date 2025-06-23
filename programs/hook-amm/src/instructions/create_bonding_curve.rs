@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface, transfer_checked, TransferChecked, set_authority, SetAuthority};
+use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface, set_authority, SetAuthority};
 use anchor_spl::associated_token::AssociatedToken;
 use crate::state::{GlobalConfig, BondingCurve};
 use crate::constants::*;
@@ -65,7 +65,10 @@ pub struct CreateBondingCurveParams {
     pub virtual_sol_reserves: u64,
 }
 
-pub fn create_bonding_curve_handler(ctx: Context<CreateBondingCurve>, params: CreateBondingCurveParams) -> Result<()> {
+pub fn create_bonding_curve_handler<'info>(
+    ctx: Context<'_, '_, '_, 'info, CreateBondingCurve<'info>>, 
+    params: CreateBondingCurveParams
+) -> Result<()> {
     // Validate parameters
     require!(params.initial_supply > 0, ErrorCode::InvalidAmount);
     require!(params.virtual_token_reserves > 0, ErrorCode::InvalidAmount);
@@ -99,18 +102,17 @@ pub fn create_bonding_curve_handler(ctx: Context<CreateBondingCurve>, params: Cr
 
     global_config.total_curves += 1;
 
-    // Transfer tokens from creator to curve token account
-    let transfer_ctx = CpiContext::new(
-        ctx.accounts.token_program.to_account_info(),
-        TransferChecked {
-            from: ctx.accounts.creator_token_account.to_account_info(),
-            to: ctx.accounts.curve_token_account.to_account_info(),
-            authority: ctx.accounts.creator.to_account_info(),
-            mint: ctx.accounts.mint.to_account_info(),
-        },
-    );
-
-    transfer_checked(transfer_ctx, params.initial_supply, ctx.accounts.mint.decimals)?;
+    // Transfer tokens from creator to curve token account (handles Token-2022 with hooks)
+    crate::utils::perform_token_transfer(
+        &ctx.accounts.creator_token_account,
+        &ctx.accounts.curve_token_account,
+        &ctx.accounts.creator.to_account_info(),
+        &ctx.accounts.token_program,
+        &ctx.accounts.mint,
+        params.initial_supply,
+        &[],
+        ctx.remaining_accounts,
+    )?;
 
     // Validate the transfer completed successfully
     ctx.accounts.curve_token_account.reload()?;

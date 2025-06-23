@@ -55,7 +55,11 @@ pub struct Sell<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn sell_handler(ctx: Context<Sell>, token_amount: u64, min_sol_amount: u64) -> Result<()> {
+pub fn sell_handler<'info>(
+    ctx: Context<'_, '_, '_, 'info, Sell<'info>>, 
+    token_amount: u64, 
+    min_sol_amount: u64
+) -> Result<()> {
     require!(token_amount > 0, ErrorCode::InvalidAmount);
     require!(!ctx.accounts.bonding_curve.complete, ErrorCode::CurveComplete);
     
@@ -75,20 +79,17 @@ pub fn sell_handler(ctx: Context<Sell>, token_amount: u64, min_sol_amount: u64) 
     
     require!(sol_amount_after_fee >= min_sol_amount, ErrorCode::SlippageExceeded);
     
-    // Transfer tokens from seller to curve
-    let cpi_accounts = anchor_spl::token_interface::TransferChecked {
-        from: ctx.accounts.user_token_account.to_account_info(),
-        mint: ctx.accounts.mint.to_account_info(),
-        to: ctx.accounts.curve_token_account.to_account_info(),
-        authority: ctx.accounts.user.to_account_info(),
-    };
-    
-    let cpi_ctx = CpiContext::new(
-        ctx.accounts.token_program.to_account_info(),
-        cpi_accounts,
-    );
-    
-    anchor_spl::token_interface::transfer_checked(cpi_ctx, token_amount, ctx.accounts.mint.decimals)?;
+    // Transfer tokens from seller to curve (handles Token-2022 with hooks)
+    crate::utils::perform_token_transfer(
+        &ctx.accounts.user_token_account,
+        &ctx.accounts.curve_token_account,
+        &ctx.accounts.user.to_account_info(),
+        &ctx.accounts.token_program,
+        &ctx.accounts.mint,
+        token_amount,
+        &[],
+        ctx.remaining_accounts,
+    )?;
     
     // Update reserves
     ctx.accounts.bonding_curve.real_sol_reserves = ctx.accounts.bonding_curve.real_sol_reserves

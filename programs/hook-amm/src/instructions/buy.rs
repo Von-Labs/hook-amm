@@ -55,7 +55,11 @@ pub struct Buy<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn buy_handler(ctx: Context<Buy>, sol_amount: u64, min_token_amount: u64) -> Result<()> {
+pub fn buy_handler<'info>(
+    ctx: Context<'_, '_, '_, 'info, Buy<'info>>, 
+    sol_amount: u64, 
+    min_token_amount: u64
+) -> Result<()> {
     require!(sol_amount > 0, ErrorCode::InvalidAmount);
     require!(!ctx.accounts.bonding_curve.complete, ErrorCode::CurveComplete);
     
@@ -115,36 +119,27 @@ pub fn buy_handler(ctx: Context<Buy>, sol_amount: u64, min_token_amount: u64) ->
         )?;
     }
     
-    // Transfer tokens from curve to buyer
-    let cpi_accounts = anchor_spl::token_interface::TransferChecked {
-        from: ctx.accounts.curve_token_account.to_account_info(),
-        mint: ctx.accounts.mint.to_account_info(),
-        to: ctx.accounts.user_token_account.to_account_info(),
-        authority: ctx.accounts.bonding_curve.to_account_info(),
-    };
-    
-    // Set up seeds with proper lifetimes
+    // Transfer tokens from curve to buyer (handles Token-2022 with hooks)
     let bonding_curve_seed = BONDING_CURVE_SEED;
     let mint_key = ctx.accounts.mint.key();
     let bump = ctx.bumps.bonding_curve;
-
-    // Create the seeds array with the correct lifetime
+    
     let signer_seeds = &[
         bonding_curve_seed,
         mint_key.as_ref(),
         &[bump],
     ];
-
-    // Create a reference to the seeds array with the right structure for CPI
-    let signers = &[&signer_seeds[..]];
     
-    let cpi_ctx = CpiContext::new_with_signer(
-        ctx.accounts.token_program.to_account_info(),
-        cpi_accounts,
-        signers
-    );
-    
-    anchor_spl::token_interface::transfer_checked(cpi_ctx, token_amount, ctx.accounts.mint.decimals)?;
+    crate::utils::perform_token_transfer(
+        &ctx.accounts.curve_token_account,
+        &ctx.accounts.user_token_account,
+        &ctx.accounts.bonding_curve.to_account_info(),
+        &ctx.accounts.token_program,
+        &ctx.accounts.mint,
+        token_amount,
+        &[signer_seeds],
+        ctx.remaining_accounts,
+    )?;
     
     emit!(TradeEvent {
         mint: ctx.accounts.mint.key(),
