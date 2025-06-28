@@ -4,9 +4,7 @@ import {
   TOKEN_PROGRAM_ID, 
   getMint, 
   Mint,
-  getTransferHook,
-  getExtraAccountMetaAddress,
-  getExtraAccountMetas
+  getTransferHook
 } from '@solana/spl-token';
 
 export async function getTokenProgramId(
@@ -51,30 +49,38 @@ export async function getTransferHookAccounts(
     const mintInfo = await getMintInfo(connection, mintAddress);
     const tokenProgramId = await getTokenProgramId(connection, mintAddress);
     
-    // Only Token-2022 can have transfer hooks
     if (!tokenProgramId.equals(TOKEN_2022_PROGRAM_ID)) {
       return [];
     }
 
     // Get transfer hook program from mint
-    const transferHookProgramId = getTransferHook(mintInfo);
-    if (!transferHookProgramId) {
+    const transferHook = getTransferHook(mintInfo);
+    if (!transferHook) {
       return [];
     }
 
-    const accounts = [
-      // Transfer hook program must be first
-      { 
-        pubkey: transferHookProgramId, 
-        isSigner: false, 
-        isWritable: false 
-      }
-    ];
+    const transferHookProgramId = transferHook.programId;
+
+    // For the simple transfer hook example, we know it needs:
+    // 1. The transfer hook program
+    // 2. The extra account meta PDA
+    // 3. The counter PDA
+    const accounts = [];
+
+    // Transfer hook program must be included
+    accounts.push({ 
+      pubkey: transferHookProgramId, 
+      isSigner: false, 
+      isWritable: false 
+    });
 
     try {
-      // Get extra account meta address
-      const extraAccountMetaAddress = getExtraAccountMetaAddress(
-        mintAddress, 
+      // Calculate extra account meta address
+      const [extraAccountMetaAddress] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from('extra-account-metas'),
+          mintAddress.toBuffer()
+        ],
         transferHookProgramId
       );
       
@@ -84,54 +90,19 @@ export async function getTransferHookAccounts(
         isWritable: false
       });
 
-      // Get extra account metas from the hook program
-      const extraAccountMetas = await getExtraAccountMetas(
-        connection,
-        extraAccountMetaAddress,
-        'confirmed',
-        TOKEN_2022_PROGRAM_ID
+      // For the example transfer hook, add the counter PDA
+      const [counterPDA] = PublicKey.findProgramAddressSync(
+        [Buffer.from('counter')],
+        transferHookProgramId
       );
-
-      // Add hook-specific accounts
-      for (const meta of extraAccountMetas) {
-        // Resolve PDA accounts for seeds-based metas
-        if (meta.addressConfig && 'seeds' in meta.addressConfig) {
-          const seeds = meta.addressConfig.seeds;
-          let resolvedAddress: PublicKey;
-          
-          // Handle common seed patterns
-          if (seeds.some(seed => seed.toString().includes('counter'))) {
-            // Counter PDA: ["counter"]
-            const [counterPDA] = PublicKey.findProgramAddressSync(
-              [Buffer.from('counter')],
-              transferHookProgramId
-            );
-            resolvedAddress = counterPDA;
-          } else {
-            // Default handling - try to resolve the address
-            try {
-              resolvedAddress = meta.addressConfig.address;
-            } catch {
-              continue; // Skip if we can't resolve
-            }
-          }
-          
-          accounts.push({
-            pubkey: resolvedAddress,
-            isSigner: meta.isSigner || false,
-            isWritable: meta.isWritable || false
-          });
-        } else if (meta.addressConfig && 'address' in meta.addressConfig) {
-          accounts.push({
-            pubkey: meta.addressConfig.address,
-            isSigner: meta.isSigner || false,
-            isWritable: meta.isWritable || false
-          });
-        }
-      }
+      
+      accounts.push({
+        pubkey: counterPDA,
+        isSigner: false,
+        isWritable: true // Counter needs to be writable
+      });
     } catch (error) {
-      console.warn('Could not fetch extra account metas:', error);
-      // Still return the hook program if we can't get extra accounts
+      console.warn('Could not calculate extra accounts:', error);
     }
 
     return accounts;
@@ -152,8 +123,8 @@ export async function hasTransferHooks(
     }
 
     const mintInfo = await getMintInfo(connection, mintAddress);
-    const transferHookProgramId = getTransferHook(mintInfo);
-    return transferHookProgramId !== null;
+    const transferHook = getTransferHook(mintInfo);
+    return transferHook !== null;
   } catch {
     return false;
   }

@@ -22,7 +22,7 @@ TypeScript SDK for interacting with the Hook AMM program - a Solana AMM with **a
 ## Installation
 
 ```bash
-npm install @hook-amm/sdk
+npm install hook-amm-sdk
 ```
 
 ## Quick Start
@@ -30,7 +30,7 @@ npm install @hook-amm/sdk
 ```typescript
 import { Connection, Keypair } from '@solana/web3.js';
 import { Wallet } from '@coral-xyz/anchor';
-import { HookAmmClient } from '@hook-amm/sdk';
+import { HookAmmClient } from 'hook-amm-sdk';
 import BN from 'bn.js';
 
 // Initialize connection and wallet
@@ -203,7 +203,7 @@ interface CreateBondingCurveParams {
 #### PDA Functions
 
 ```typescript
-import { getGlobalConfigPDA, getBondingCurvePDA, getCurveTokenAccountPDA } from '@hook-amm/sdk';
+import { getGlobalConfigPDA, getBondingCurvePDA, getCurveTokenAccountPDA } from 'hook-amm-sdk';
 
 const [globalConfig, bump] = getGlobalConfigPDA();
 const [bondingCurve, bump] = getBondingCurvePDA(tokenMint);
@@ -213,7 +213,7 @@ const [curveTokenAccount, bump] = getCurveTokenAccountPDA(bondingCurve, tokenMin
 #### Math Functions
 
 ```typescript
-import { calculateBuyAmount, calculateSellAmount, calculateTokenPrice } from '@hook-amm/sdk';
+import { calculateBuyAmount, calculateSellAmount, calculateTokenPrice } from 'hook-amm-sdk';
 
 // Calculate buy amounts
 const { tokenAmount, fee } = calculateBuyAmount(
@@ -245,7 +245,7 @@ const priceInSol = calculateTokenPrice(
 #### Token Utilities
 
 ```typescript
-import { getTokenProgramId, getMintInfo, isToken2022, hasTransferHooks } from '@hook-amm/sdk';
+import { getTokenProgramId, getMintInfo, isToken2022, hasTransferHooks } from 'hook-amm-sdk';
 
 // Detect token program
 const tokenProgramId = await getTokenProgramId(connection, mintAddress);
@@ -375,7 +375,7 @@ try {
 ## Constants
 
 ```typescript
-import { PROGRAM_ID, FEE_BASIS_POINTS, FEE_DENOMINATOR } from '@hook-amm/sdk';
+import { PROGRAM_ID, FEE_BASIS_POINTS, FEE_DENOMINATOR } from 'hook-amm-sdk';
 
 console.log('Program ID:', PROGRAM_ID.toBase58());
 console.log('Fee:', FEE_BASIS_POINTS / FEE_DENOMINATOR * 100, '%'); // 1%

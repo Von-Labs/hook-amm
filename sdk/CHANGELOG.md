@@ -2,7 +2,7 @@
 
 All notable changes to the HookAMM SDK will be documented in this file.
 
-## [0.2.0] - 2024-01-XX
+## [0.2.0] - 2025-06-28
 
 ### Added
 - 🪝 **Automatic Transfer Hook Handling**: The SDK now automatically detects and handles Token-2022 transfer hooks
@@ -32,7 +32,7 @@ All notable changes to the HookAMM SDK will be documented in this file.
 - Graceful fallback when hook accounts cannot be resolved
 - Support for complex hook configurations with multiple required accounts
 
-## [0.1.0] - 2024-01-XX
+## [0.1.0] - 2025-06-01
 
 ### Added
 - 🚀 Initial release of HookAMM SDK

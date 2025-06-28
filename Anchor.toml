@@ -20,7 +20,7 @@ members = ["programs/hook-amm", "programs/transfer-hook"]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

@@ -1,5 +1,5 @@
 {
-  "name": "@hook-amm/sdk",
+  "name": "hook-amm-sdk",
   "version": "0.2.0",
   "description": "TypeScript SDK for Hook AMM - Solana AMM with automatic Token-2022 transfer hook handling",
   "main": "dist/index.js",
@@ -22,8 +22,17 @@
     "bonding-curve",
     "dex"
   ],
-  "author": "",
+  "author": "Von Labs",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Von-Labs/hook-amm.git",
+    "directory": "sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/Von-Labs/hook-amm/issues"
+  },
+  "homepage": "https://github.com/Von-Labs/hook-amm#readme",
   "dependencies": {
     "@coral-xyz/anchor": "^0.30.1",
     "@solana/spl-token": "^0.4.8",

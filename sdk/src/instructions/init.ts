@@ -5,16 +5,16 @@ import { getGlobalConfigPDA } from '../utils/pda';
 export async function createInitializeGlobalConfigInstruction(
   program: Program,
   authority: PublicKey,
-  feeRecipient: PublicKey,
-  payer: PublicKey
+  feeRecipient: PublicKey
 ): Promise<TransactionInstruction> {
   const [globalConfig] = getGlobalConfigPDA();
 
   return await program.methods
-    .initializeGlobalConfig(authority, feeRecipient)
+    .initializeGlobalConfig()
     .accounts({
       globalConfig,
-      authority: payer,
+      authority,
+      feeRecipient,
       systemProgram: SystemProgram.programId,
     })
     .instruction();

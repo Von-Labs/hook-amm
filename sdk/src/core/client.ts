@@ -43,7 +43,7 @@ export class HookAmmClient {
     this.connection = connection;
     this.wallet = wallet;
     this.provider = new AnchorProvider(connection, wallet, {});
-    this.program = new Program(programIdl, PROGRAM_ID, this.provider);
+    this.program = new Program(programIdl, this.provider);
   }
 
   // Initialize global configuration
@@ -55,10 +55,11 @@ export class HookAmmClient {
     const [globalConfig] = getGlobalConfigPDA();
 
     const tx = await this.program.methods
-      .initializeGlobalConfig(authority, feeRecipient)
+      .initializeGlobalConfig()
       .accounts({
         globalConfig,
         authority: authorityKeypair.publicKey,
+        feeRecipient,
         systemProgram: SystemProgram.programId,
       })
       .signers([authorityKeypair])
@@ -302,22 +303,22 @@ export class HookAmmClient {
   // Get global configuration
   async getGlobalConfig(): Promise<GlobalConfig> {
     const [globalConfigPDA] = getGlobalConfigPDA();
-    return await this.program.account.globalConfig.fetch(globalConfigPDA);
+    return await (this.program.account as any).globalConfig.fetch(globalConfigPDA);
   }
 
   // Get bonding curve data
   async getBondingCurve(bondingCurve: PublicKey): Promise<BondingCurve> {
-    return await this.program.account.bondingCurve.fetch(bondingCurve);
+    return await (this.program.account as any).bondingCurve.fetch(bondingCurve);
   }
 
   // Get all bonding curves
   async getAllBondingCurves(): Promise<{ publicKey: PublicKey; account: BondingCurve }[]> {
-    return await this.program.account.bondingCurve.all();
+    return await (this.program.account as any).bondingCurve.all();
   }
 
   // Get bonding curves by creator
   async getBondingCurvesByCreator(creator: PublicKey): Promise<{ publicKey: PublicKey; account: BondingCurve }[]> {
-    return await this.program.account.bondingCurve.all([
+    return await (this.program.account as any).bondingCurve.all([
       {
         memcmp: {
           offset: 8 + 32, // Skip discriminator and mint
