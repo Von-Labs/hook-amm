@@ -37,10 +37,9 @@ export interface TradeEvent {
 
 export interface CreateBondingCurveParams {
   tokenMint: PublicKey;
-  initialVirtualTokenReserves: BN;
-  initialVirtualSolReserves: BN;
-  initialRealTokenReserves: BN;
-  tokenTotalSupply: BN;
+  initialSupply: BN;
+  virtualTokenReserves: BN;
+  virtualSolReserves: BN;
 }
 
 export interface BuyParams {

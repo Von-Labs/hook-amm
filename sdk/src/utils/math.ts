@@ -2,63 +2,47 @@ import BN from 'bn.js';
 import { FEE_BASIS_POINTS, FEE_DENOMINATOR } from '../core/constants';
 
 export function calculateBuyAmount(
-  solAmountIn: BN,
-  virtualSolReserves: BN,
-  virtualTokenReserves: BN,
+  solAmountAfterFee: BN,
+  currentSolReserves: BN,
+  currentTokenReserves: BN,
   realSolReserves: BN,
   realTokenReserves: BN
 ): { tokenAmount: BN; fee: BN } {
-  // Calculate fee (1%)
-  const fee = solAmountIn.mul(new BN(FEE_BASIS_POINTS)).div(new BN(FEE_DENOMINATOR));
-  const solAmountAfterFee = solAmountIn.sub(fee);
+  // Using the exact program formula from utils.rs:
+  // k = sol_reserves * token_reserves
+  // new_sol_reserves = sol_reserves + sol_amount
+  // new_token_reserves = k / new_sol_reserves
+  // tokens_out = token_reserves - new_token_reserves
 
-  // Calculate current reserves
-  const currentSolReserves = virtualSolReserves.add(realSolReserves);
-  const currentTokenReserves = virtualTokenReserves.sub(realTokenReserves);
-
-  // Calculate invariant k = x * y
   const k = currentSolReserves.mul(currentTokenReserves);
-
-  // Calculate new SOL reserves after trade
   const newSolReserves = currentSolReserves.add(solAmountAfterFee);
-
-  // Calculate new token reserves to maintain k
   const newTokenReserves = k.div(newSolReserves);
-
-  // Calculate tokens out
   const tokenAmount = currentTokenReserves.sub(newTokenReserves);
 
-  return { tokenAmount, fee };
+  // Fee is calculated separately by the caller
+  return { tokenAmount, fee: new BN(0) };
 }
 
 export function calculateSellAmount(
   tokenAmountIn: BN,
-  virtualSolReserves: BN,
-  virtualTokenReserves: BN,
-  realSolReserves: BN,
-  realTokenReserves: BN
+  currentTokenReserves: BN,
+  currentSolReserves: BN,
+  realTokenReserves: BN,
+  realSolReserves: BN
 ): { solAmount: BN; fee: BN } {
-  // Calculate current reserves
-  const currentSolReserves = virtualSolReserves.add(realSolReserves);
-  const currentTokenReserves = virtualTokenReserves.sub(realTokenReserves);
+  // Using the exact program formula from utils.rs:
+  // k = token_reserves * sol_reserves
+  // new_token_reserves = token_reserves + token_amount
+  // new_sol_reserves = k / new_token_reserves
+  // sol_out = sol_reserves - new_sol_reserves
 
-  // Calculate invariant k = x * y
-  const k = currentSolReserves.mul(currentTokenReserves);
-
-  // Calculate new token reserves after trade
+  const k = currentTokenReserves.mul(currentSolReserves);
   const newTokenReserves = currentTokenReserves.add(tokenAmountIn);
-
-  // Calculate new SOL reserves to maintain k
   const newSolReserves = k.div(newTokenReserves);
+  const solAmount = currentSolReserves.sub(newSolReserves);
 
-  // Calculate SOL out before fee
-  const solAmountBeforeFee = currentSolReserves.sub(newSolReserves);
-
-  // Calculate fee (1%)
-  const fee = solAmountBeforeFee.mul(new BN(FEE_BASIS_POINTS)).div(new BN(FEE_DENOMINATOR));
-  const solAmount = solAmountBeforeFee.sub(fee);
-
-  return { solAmount, fee };
+  // Fee is calculated separately by the caller
+  return { solAmount, fee: new BN(0) };
 }
 
 export function calculatePriceImpact(
