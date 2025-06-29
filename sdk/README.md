@@ -11,13 +11,15 @@ TypeScript SDK for interacting with the Hook AMM program - a Solana AMM with **a
 - 🧮 **Math Utilities**: Built-in calculations for reserves, prices, and slippage
 - 🔐 **Type Safety**: Full TypeScript support with comprehensive types
 - 🛡️ **Error Handling**: Comprehensive error handling for hook-related issues
+- 💻 **Multi-Platform**: Works with wallet adapters (browser) and keypairs (Node.js)
 
-## ✨ What's New in v0.2.0
+## ✨ What's New in v0.4.0
 
-- 🪝 **Automatic Transfer Hook Handling**: No more manual hook account management!
-- 🔍 **Hook Detection**: `isTokenWithHooks()` to check token capabilities
-- 🔧 **Better Account Resolution**: Automatic PDA resolution for hook accounts
-- 📖 **Complete Examples**: Full transfer hook integration examples
+- 🔧 **Consolidated Architecture**: Single unified client (removed V2/V3 versions)
+- 📝 **Updated Parameters**: `CreateBondingCurveParams` now matches program structure
+- 🎯 **Program Alignment**: Math utilities perfectly aligned with on-chain calculations
+- 🧹 **Cleaner API**: Simplified exports and reduced complexity
+- ⚡ **Performance**: Optimized for better performance and smaller bundle size
 
 ## Installation
 
@@ -30,8 +32,8 @@ npm install hook-amm-sdk
 ### Option 1: With Wallet Adapters (Recommended for dApps)
 
 ```typescript
-import { Connection } from '@solana/web3.js';
-import { HookAmmClientV2 } from 'hook-amm-sdk';
+import { Connection, PublicKey } from '@solana/web3.js';
+import { HookAmmClient } from 'hook-amm-sdk';
 import { useWallet } from '@solana/wallet-adapter-react';
 import BN from 'bn.js';
 
@@ -52,7 +54,7 @@ function TradingComponent() {
   const programIdl = { /* your program IDL */ };
 
   // Create client with wallet adapter
-  const client = HookAmmClientV2.create(connection, walletAdapter, programIdl);
+  const client = HookAmmClient.create(connection, walletAdapter, programIdl);
 }
 ```
 
@@ -60,7 +62,7 @@ function TradingComponent() {
 
 ```typescript
 import { Connection, Keypair } from '@solana/web3.js';
-import { HookAmmClientV2 } from 'hook-amm-sdk';
+import { HookAmmClient } from 'hook-amm-sdk';
 import BN from 'bn.js';
 
 // Initialize connection and keypair
@@ -71,13 +73,13 @@ const keypair = Keypair.generate();
 const programIdl = { /* your program IDL */ };
 
 // Create client with keypair
-const client = HookAmmClientV2.create(connection, keypair, programIdl);
+const client = HookAmmClient.create(connection, keypair, programIdl);
 ```
 
-### Option 3: Original API (Backwards Compatible)
+### Basic Trading Example
 
 ```typescript
-import { Connection, Keypair } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { Wallet } from '@coral-xyz/anchor';
 import { HookAmmClient } from 'hook-amm-sdk';
 import BN from 'bn.js';
@@ -125,9 +127,9 @@ const signature = await client.buy(buyParams);
 
 ## API Reference
 
-### HookAmmClient / HookAmmClientV2
+### HookAmmClient
 
-Main client classes for interacting with the Hook AMM program.
+Main client class for interacting with the Hook AMM program.
 
 #### Constructors
 
@@ -135,8 +137,8 @@ Main client classes for interacting with the Hook AMM program.
 // Original constructor (backwards compatible)
 new HookAmmClient(connection: Connection, wallet: Wallet, programIdl: Idl)
 
-// New constructor with wallet adapter support
-HookAmmClientV2.create(connection: Connection, signer: WalletAdapter | Keypair, programIdl: Idl)
+// Factory method with wallet adapter support
+HookAmmClient.create(connection: Connection, signer: WalletAdapter | Keypair, programIdl: Idl)
 ```
 
 #### Wallet Support
@@ -156,8 +158,8 @@ interface WalletAdapter {
 const keypair = Keypair.generate();
 
 // Both work with the same API
-const client = HookAmmClientV2.create(connection, walletAdapter, programIdl);
-const client2 = HookAmmClientV2.create(connection, keypair, programIdl);
+const client = HookAmmClient.create(connection, walletAdapter, programIdl);
+const client2 = HookAmmClient.create(connection, keypair, programIdl);
 ```
 
 #### Methods
@@ -223,7 +225,7 @@ async initializeGlobalConfig(
 async getGlobalConfig(): Promise<GlobalConfig>
 ```
 
-##### Token-2022 Hook Support (New in v0.2.0!)
+##### Token-2022 Hook Support
 
 ```typescript
 // Check if token has transfer hooks
@@ -287,12 +289,12 @@ interface SellParams {
   minSolAmount: BN;
 }
 
+// Updated in v0.4.0 to match program structure
 interface CreateBondingCurveParams {
   tokenMint: PublicKey;
-  initialVirtualTokenReserves: BN;
-  initialVirtualSolReserves: BN;
-  initialRealTokenReserves: BN;
-  tokenTotalSupply: BN;
+  initialSupply: BN;           // Changed from tokenTotalSupply
+  virtualTokenReserves: BN;    // Changed from initialVirtualTokenReserves
+  virtualSolReserves: BN;      // Changed from initialVirtualSolReserves
 }
 ```
 
@@ -313,22 +315,22 @@ const [curveTokenAccount, bump] = getCurveTokenAccountPDA(bondingCurve, tokenMin
 ```typescript
 import { calculateBuyAmount, calculateSellAmount, calculateTokenPrice } from 'hook-amm-sdk';
 
-// Calculate buy amounts
+// Calculate buy amounts (matches program's exact formula)
 const { tokenAmount, fee } = calculateBuyAmount(
-  solAmountIn,
-  virtualSolReserves,
-  virtualTokenReserves,
+  solAmountAfterFee,
+  currentSolReserves,
+  currentTokenReserves,
   realSolReserves,
   realTokenReserves
 );
 
-// Calculate sell amounts  
+// Calculate sell amounts (matches program's exact formula)
 const { solAmount, fee } = calculateSellAmount(
   tokenAmountIn,
-  virtualSolReserves,
-  virtualTokenReserves,
-  realSolReserves,
-  realTokenReserves
+  currentTokenReserves,
+  currentSolReserves,
+  realTokenReserves,
+  realSolReserves
 );
 
 // Get current token price
@@ -354,7 +356,7 @@ const mintInfo = await getMintInfo(connection, mintAddress);
 // Check if Token-2022
 const isT22 = isToken2022(mintAccountInfo);
 
-// Check if token has transfer hooks (new in v0.2.0!)
+// Check if token has transfer hooks
 const hasHooks = await hasTransferHooks(connection, mintAddress);
 ```
 
@@ -415,7 +417,7 @@ if (hasHooks) {
 ```typescript
 // React component with wallet adapter
 import { useWallet } from '@solana/wallet-adapter-react';
-import { HookAmmClientV2 } from 'hook-amm-sdk';
+import { HookAmmClient } from 'hook-amm-sdk';
 
 function TradingComponent() {
   const { wallet, publicKey, signTransaction, sendTransaction } = useWallet();
@@ -435,7 +437,7 @@ function TradingComponent() {
     };
 
     // Create client
-    const client = HookAmmClientV2.create(connection, walletAdapter, programIdl);
+    const client = HookAmmClient.create(connection, walletAdapter, programIdl);
 
     // Trade - wallet will prompt user for approval
     const buyParams = {
@@ -462,7 +464,7 @@ function TradingComponent() {
 // Different signers for different operations
 const connection = new Connection('https://api.devnet.solana.com');
 const adminKeypair = Keypair.generate();
-const client = HookAmmClientV2.create(connection, adminKeypair, programIdl);
+const client = HookAmmClient.create(connection, adminKeypair, programIdl);
 
 // Admin operations use admin keypair (default)
 await client.initializeGlobalConfig(
@@ -487,12 +489,12 @@ import BN from 'bn.js';
 
 const tokenMint = new PublicKey('...');
 
+// Updated parameters structure in v0.4.0
 const params = {
   tokenMint,
-  initialVirtualTokenReserves: new BN('1000000000000'), // 1M tokens
-  initialVirtualSolReserves: new BN('30000000000'),     // 30 SOL
-  initialRealTokenReserves: new BN('0'),                // Start with 0
-  tokenTotalSupply: new BN('1000000000000'),            // 1M total supply
+  initialSupply: new BN('1000000000000'),        // Total supply to deposit
+  virtualTokenReserves: new BN('1000000000000'), // Virtual token reserves
+  virtualSolReserves: new BN('30000000000'),     // Virtual SOL reserves (30 SOL)
 };
 
 // With wallet adapter (prompts user)
@@ -551,6 +553,49 @@ try {
   }
 }
 ```
+
+## Migration Guide
+
+### From v0.3.0 to v0.4.0
+
+1. **Remove V2/V3 imports**: Use only `HookAmmClient` now
+   ```typescript
+   // Before
+   import { HookAmmClientV2 } from 'hook-amm-sdk';
+   
+   // After
+   import { HookAmmClient } from 'hook-amm-sdk';
+   ```
+
+2. **Update CreateBondingCurveParams**: Parameter names have changed
+   ```typescript
+   // Before
+   const params = {
+     tokenMint,
+     initialVirtualTokenReserves: new BN('1000000000000'),
+     initialVirtualSolReserves: new BN('30000000000'),
+     initialRealTokenReserves: new BN('0'),
+     tokenTotalSupply: new BN('1000000000000'),
+   };
+   
+   // After
+   const params = {
+     tokenMint,
+     initialSupply: new BN('1000000000000'),        // Renamed from tokenTotalSupply
+     virtualTokenReserves: new BN('1000000000000'), // Renamed from initialVirtualTokenReserves
+     virtualSolReserves: new BN('30000000000'),     // Renamed from initialVirtualSolReserves
+   };
+   ```
+
+3. **Factory method**: Use `.create()` for wallet adapter support
+   ```typescript
+   // Before
+   const client = new HookAmmClientV2(connection, wallet, programIdl);
+   
+   // After
+   const client = HookAmmClient.create(connection, walletOrKeypair, programIdl);
+   // Or continue using: new HookAmmClient(connection, wallet, programIdl);
+   ```
 
 ## Constants
 
