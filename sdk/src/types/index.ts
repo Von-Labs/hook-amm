@@ -1,6 +1,9 @@
 import { PublicKey } from '@solana/web3.js';
 import BN from 'bn.js';
 
+// Export wallet types
+export * from './wallet';
+
 export interface GlobalConfig {
   authority: PublicKey;
   feeRecipient: PublicKey;

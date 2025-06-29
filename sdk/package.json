@@ -1,6 +1,6 @@
 {
   "name": "hook-amm-sdk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "TypeScript SDK for Hook AMM - Solana AMM with automatic Token-2022 transfer hook handling",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

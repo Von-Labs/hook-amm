@@ -2,6 +2,27 @@
 
 All notable changes to the HookAMM SDK will be documented in this file.
 
+## [0.3.0] - 2025-06-28
+
+### Added
+- 🌐 **Wallet Adapter Support**: Full support for browser wallet adapters (Phantom, Solflare, etc.)
+- 🔄 **Flexible Signer System**: Use wallet adapters, keypairs, or mix both in the same application
+- 🎯 **HookAmmClientV2**: New client class with enhanced wallet support
+- 🛠️ **Wallet Utilities**: Helper functions for wallet operations and type checking
+- 📱 **React Integration**: Easy integration with @solana/wallet-adapter-react
+- ⚙️ **Transaction Options**: Configurable transaction sending options
+
+### Changed
+- 🔄 **Optional Signer Parameters**: All trade methods now accept optional signer parameters
+- 📝 **Enhanced Examples**: Updated documentation with wallet adapter examples
+- 🔧 **Better Error Handling**: Improved error messages for wallet-related issues
+
+### Technical Details
+- New `WalletAdapter` interface compatible with @solana/wallet-adapter-base
+- `SignerType` union type supporting both keypairs and wallet adapters
+- Automatic signer detection and handling
+- Backwards compatible with existing keypair-based API
+
 ## [0.2.0] - 2025-06-28
 
 ### Added

@@ -27,6 +27,55 @@ npm install hook-amm-sdk
 
 ## Quick Start
 
+### Option 1: With Wallet Adapters (Recommended for dApps)
+
+```typescript
+import { Connection } from '@solana/web3.js';
+import { HookAmmClientV2 } from 'hook-amm-sdk';
+import { useWallet } from '@solana/wallet-adapter-react';
+import BN from 'bn.js';
+
+// In a React component
+function TradingComponent() {
+  const { wallet, publicKey, signTransaction } = useWallet();
+  const connection = new Connection('https://api.devnet.solana.com');
+
+  // Create wallet adapter
+  const walletAdapter = {
+    publicKey,
+    signTransaction,
+    signAllTransactions: wallet?.adapter?.signAllTransactions,
+    sendTransaction: wallet?.adapter?.sendTransaction
+  };
+
+  // Load your program IDL
+  const programIdl = { /* your program IDL */ };
+
+  // Create client with wallet adapter
+  const client = HookAmmClientV2.create(connection, walletAdapter, programIdl);
+}
+```
+
+### Option 2: With Keypairs (For testing/backends)
+
+```typescript
+import { Connection, Keypair } from '@solana/web3.js';
+import { HookAmmClientV2 } from 'hook-amm-sdk';
+import BN from 'bn.js';
+
+// Initialize connection and keypair
+const connection = new Connection('https://api.devnet.solana.com');
+const keypair = Keypair.generate();
+
+// Load your program IDL
+const programIdl = { /* your program IDL */ };
+
+// Create client with keypair
+const client = HookAmmClientV2.create(connection, keypair, programIdl);
+```
+
+### Option 3: Original API (Backwards Compatible)
+
 ```typescript
 import { Connection, Keypair } from '@solana/web3.js';
 import { Wallet } from '@coral-xyz/anchor';
@@ -65,20 +114,50 @@ const buyParams = {
   minTokenAmount: quote.tokenAmount.mul(new BN(95)).div(new BN(100)) // 5% slippage
 };
 
-const signature = await client.buy(buyParams, userKeypair);
+// With wallet adapters (will prompt user for approval)
+const signature = await client.buy(buyParams);
+
+// With keypairs (for testing/backends)
+// const signature = await client.buy(buyParams, userKeypair);
+
 // ✅ Transfer hooks handled automatically - no additional configuration needed!
 ```
 
 ## API Reference
 
-### HookAmmClient
+### HookAmmClient / HookAmmClientV2
 
-Main client class for interacting with the Hook AMM program.
+Main client classes for interacting with the Hook AMM program.
 
-#### Constructor
+#### Constructors
 
 ```typescript
+// Original constructor (backwards compatible)
 new HookAmmClient(connection: Connection, wallet: Wallet, programIdl: Idl)
+
+// New constructor with wallet adapter support
+HookAmmClientV2.create(connection: Connection, signer: WalletAdapter | Keypair, programIdl: Idl)
+```
+
+#### Wallet Support
+
+The SDK supports multiple wallet types:
+
+```typescript
+// Wallet adapters (Phantom, Solflare, etc.)
+interface WalletAdapter {
+  publicKey: PublicKey | null;
+  signTransaction?(transaction: Transaction): Promise<Transaction>;
+  signAllTransactions?(transactions: Transaction[]): Promise<Transaction[]>;
+  sendTransaction?(transaction: Transaction, connection: Connection, options?: any): Promise<string>;
+}
+
+// Keypairs (for testing/backends)
+const keypair = Keypair.generate();
+
+// Both work with the same API
+const client = HookAmmClientV2.create(connection, walletAdapter, programIdl);
+const client2 = HookAmmClientV2.create(connection, keypair, programIdl);
 ```
 
 #### Methods
@@ -87,10 +166,20 @@ new HookAmmClient(connection: Connection, wallet: Wallet, programIdl: Idl)
 
 ```typescript
 // Buy tokens with SOL (automatically handles transfer hooks)
-async buy(params: BuyParams, userKeypair: Keypair, additionalHookAccounts?: HookAccount[]): Promise<string>
+async buy(
+  params: BuyParams, 
+  signer?: WalletAdapter | Keypair, // Optional - uses client's default signer
+  additionalHookAccounts?: HookAccount[],
+  options?: SendTransactionOptions
+): Promise<string>
 
 // Sell tokens for SOL (automatically handles transfer hooks)
-async sell(params: SellParams, userKeypair: Keypair, additionalHookAccounts?: HookAccount[]): Promise<string>
+async sell(
+  params: SellParams, 
+  signer?: WalletAdapter | Keypair, // Optional - uses client's default signer
+  additionalHookAccounts?: HookAccount[],
+  options?: SendTransactionOptions
+): Promise<string>
 
 // Get buy quote
 async getBuyQuote(bondingCurve: PublicKey, solAmount: BN): Promise<PriceQuote>
@@ -103,7 +192,11 @@ async getSellQuote(bondingCurve: PublicKey, tokenAmount: BN): Promise<PriceQuote
 
 ```typescript
 // Create new bonding curve
-async createBondingCurve(params: CreateBondingCurveParams, creatorKeypair: Keypair): Promise<string>
+async createBondingCurve(
+  params: CreateBondingCurveParams, 
+  signer?: WalletAdapter | Keypair, // Optional - uses client's default signer
+  options?: SendTransactionOptions
+): Promise<string>
 
 // Get bonding curve data
 async getBondingCurve(bondingCurve: PublicKey): Promise<BondingCurve>
@@ -119,7 +212,12 @@ async getBondingCurvesByCreator(creator: PublicKey): Promise<{publicKey: PublicK
 
 ```typescript
 // Initialize global config (admin only)
-async initializeGlobalConfig(authority: PublicKey, feeRecipient: PublicKey, authorityKeypair: Keypair): Promise<string>
+async initializeGlobalConfig(
+  authority: PublicKey, 
+  feeRecipient: PublicKey, 
+  signer?: WalletAdapter | Keypair, // Optional - uses client's default signer
+  options?: SendTransactionOptions
+): Promise<string>
 
 // Get global configuration
 async getGlobalConfig(): Promise<GlobalConfig>
@@ -312,13 +410,81 @@ if (hasHooks) {
 
 ## Examples
 
+### Wallet Adapter Integration
+
+```typescript
+// React component with wallet adapter
+import { useWallet } from '@solana/wallet-adapter-react';
+import { HookAmmClientV2 } from 'hook-amm-sdk';
+
+function TradingComponent() {
+  const { wallet, publicKey, signTransaction, sendTransaction } = useWallet();
+  const connection = new Connection('https://api.devnet.solana.com');
+
+  const handleTrade = async () => {
+    if (!wallet || !publicKey) {
+      throw new Error('Wallet not connected');
+    }
+
+    // Create wallet adapter
+    const walletAdapter = {
+      publicKey,
+      signTransaction,
+      signAllTransactions: wallet.adapter.signAllTransactions,
+      sendTransaction
+    };
+
+    // Create client
+    const client = HookAmmClientV2.create(connection, walletAdapter, programIdl);
+
+    // Trade - wallet will prompt user for approval
+    const buyParams = {
+      bondingCurve: bondingCurvePubkey,
+      solAmount: new BN(1000000000),
+      minTokenAmount: new BN(0)
+    };
+
+    const signature = await client.buy(buyParams);
+    console.log('Trade successful:', signature);
+  };
+
+  return (
+    <button onClick={handleTrade} disabled={!publicKey}>
+      {publicKey ? 'Buy Tokens' : 'Connect Wallet'}
+    </button>
+  );
+}
+```
+
+### Mixed Signer Usage
+
+```typescript
+// Different signers for different operations
+const connection = new Connection('https://api.devnet.solana.com');
+const adminKeypair = Keypair.generate();
+const client = HookAmmClientV2.create(connection, adminKeypair, programIdl);
+
+// Admin operations use admin keypair (default)
+await client.initializeGlobalConfig(
+  adminKeypair.publicKey,
+  feeRecipient
+);
+
+// User operations can use different signers
+const userWallet = getConnectedWallet(); // From wallet adapter
+await client.buy(buyParams, userWallet); // Specify different signer
+
+// Or with keypair for testing
+const testKeypair = Keypair.generate();
+await client.buy(buyParams, testKeypair);
+```
+
 ### Creating a Bonding Curve
 
 ```typescript
 import { Keypair } from '@solana/web3.js';
 import BN from 'bn.js';
 
-const creatorKeypair = Keypair.generate();
 const tokenMint = new PublicKey('...');
 
 const params = {
@@ -329,7 +495,12 @@ const params = {
   tokenTotalSupply: new BN('1000000000000'),            // 1M total supply
 };
 
-const signature = await client.createBondingCurve(params, creatorKeypair);
+// With wallet adapter (prompts user)
+const signature = await client.createBondingCurve(params);
+
+// With specific keypair
+const creatorKeypair = Keypair.generate();
+const signature2 = await client.createBondingCurve(params, creatorKeypair);
 ```
 
 ### Trading with Price Quotes
@@ -353,19 +524,28 @@ const buyParams = {
   minTokenAmount: buyQuote.tokenAmount.mul(new BN(95)).div(new BN(100)) // 5% slippage
 };
 
-const signature = await client.buy(buyParams, userKeypair);
+// With wallet adapter (default)
+const signature = await client.buy(buyParams);
+
+// With specific keypair (for testing/backends)
+const userKeypair = Keypair.generate();
+const signature2 = await client.buy(buyParams, userKeypair);
 ```
 
 ## Error Handling
 
 ```typescript
 try {
-  await client.buy(buyParams, userKeypair);
+  await client.buy(buyParams);
 } catch (error) {
   if (error.message.includes('SlippageTooHigh')) {
     console.error('Trade failed due to slippage');
   } else if (error.message.includes('InsufficientFunds')) {
     console.error('Insufficient balance');
+  } else if (error.message.includes('User rejected')) {
+    console.error('User cancelled the transaction');
+  } else if (error.message.includes('does not support signing')) {
+    console.error('Wallet cannot sign transactions');
   } else {
     console.error('Trade failed:', error);
   }
