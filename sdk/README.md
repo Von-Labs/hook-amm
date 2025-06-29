@@ -13,13 +13,12 @@ TypeScript SDK for interacting with the Hook AMM program - a Solana AMM with **a
 - 🛡️ **Error Handling**: Comprehensive error handling for hook-related issues
 - 💻 **Multi-Platform**: Works with wallet adapters (browser) and keypairs (Node.js)
 
-## ✨ What's New in v0.4.0
+## ✨ What's New in v0.4.2
 
-- 🔧 **Consolidated Architecture**: Single unified client (removed V2/V3 versions)
-- 📝 **Updated Parameters**: `CreateBondingCurveParams` now matches program structure
-- 🎯 **Program Alignment**: Math utilities perfectly aligned with on-chain calculations
-- 🧹 **Cleaner API**: Simplified exports and reduced complexity
-- ⚡ **Performance**: Optimized for better performance and smaller bundle size
+- 📦 **Built-in IDL**: Program IDL is now included in the SDK - no need to provide it separately
+- 🚀 **Zero Configuration**: Import and use immediately with `HookAmmIdl`
+- 🔧 **Simplified Setup**: Reduced setup complexity for faster development
+- ⚡ **Ready to Use**: All examples updated to use the built-in IDL
 
 ## Installation
 
@@ -33,7 +32,7 @@ npm install hook-amm-sdk
 
 ```typescript
 import { Connection, PublicKey } from '@solana/web3.js';
-import { HookAmmClient } from 'hook-amm-sdk';
+import { HookAmmClient, HookAmmIdl } from 'hook-amm-sdk';
 import { useWallet } from '@solana/wallet-adapter-react';
 import BN from 'bn.js';
 
@@ -50,11 +49,8 @@ function TradingComponent() {
     sendTransaction: wallet?.adapter?.sendTransaction
   };
 
-  // Load your program IDL
-  const programIdl = { /* your program IDL */ };
-
-  // Create client with wallet adapter
-  const client = HookAmmClient.create(connection, walletAdapter, programIdl);
+  // Create client with built-in IDL
+  const client = HookAmmClient.create(connection, walletAdapter, HookAmmIdl);
 }
 ```
 
@@ -62,18 +58,15 @@ function TradingComponent() {
 
 ```typescript
 import { Connection, Keypair } from '@solana/web3.js';
-import { HookAmmClient } from 'hook-amm-sdk';
+import { HookAmmClient, HookAmmIdl } from 'hook-amm-sdk';
 import BN from 'bn.js';
 
 // Initialize connection and keypair
 const connection = new Connection('https://api.devnet.solana.com');
 const keypair = Keypair.generate();
 
-// Load your program IDL
-const programIdl = { /* your program IDL */ };
-
-// Create client with keypair
-const client = HookAmmClient.create(connection, keypair, programIdl);
+// Create client with built-in IDL
+const client = HookAmmClient.create(connection, keypair, HookAmmIdl);
 ```
 
 ### Basic Trading Example
@@ -81,18 +74,15 @@ const client = HookAmmClient.create(connection, keypair, programIdl);
 ```typescript
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { Wallet } from '@coral-xyz/anchor';
-import { HookAmmClient } from 'hook-amm-sdk';
+import { HookAmmClient, HookAmmIdl } from 'hook-amm-sdk';
 import BN from 'bn.js';
 
 // Initialize connection and wallet
 const connection = new Connection('https://api.devnet.solana.com');
 const wallet = new Wallet(Keypair.generate());
 
-// Load your program IDL
-const programIdl = { /* your program IDL */ };
-
-// Create client
-const client = new HookAmmClient(connection, wallet, programIdl);
+// Create client with built-in IDL
+const client = new HookAmmClient(connection, wallet, HookAmmIdl);
 
 // 🪝 Check if token has transfer hooks (automatic detection!)
 const hasHooks = await client.isTokenWithHooks(tokenMint);
@@ -139,6 +129,10 @@ new HookAmmClient(connection: Connection, wallet: Wallet, programIdl: Idl)
 
 // Factory method with wallet adapter support
 HookAmmClient.create(connection: Connection, signer: WalletAdapter | Keypair, programIdl: Idl)
+
+// With built-in IDL (recommended)
+import { HookAmmIdl } from 'hook-amm-sdk';
+const client = HookAmmClient.create(connection, signer, HookAmmIdl);
 ```
 
 #### Wallet Support
@@ -157,9 +151,9 @@ interface WalletAdapter {
 // Keypairs (for testing/backends)
 const keypair = Keypair.generate();
 
-// Both work with the same API
-const client = HookAmmClient.create(connection, walletAdapter, programIdl);
-const client2 = HookAmmClient.create(connection, keypair, programIdl);
+// Both work with the same API (using built-in IDL)
+const client = HookAmmClient.create(connection, walletAdapter, HookAmmIdl);
+const client2 = HookAmmClient.create(connection, keypair, HookAmmIdl);
 ```
 
 #### Methods
@@ -417,7 +411,7 @@ if (hasHooks) {
 ```typescript
 // React component with wallet adapter
 import { useWallet } from '@solana/wallet-adapter-react';
-import { HookAmmClient } from 'hook-amm-sdk';
+import { HookAmmClient, HookAmmIdl } from 'hook-amm-sdk';
 
 function TradingComponent() {
   const { wallet, publicKey, signTransaction, sendTransaction } = useWallet();
@@ -436,8 +430,8 @@ function TradingComponent() {
       sendTransaction
     };
 
-    // Create client
-    const client = HookAmmClient.create(connection, walletAdapter, programIdl);
+    // Create client with built-in IDL
+    const client = HookAmmClient.create(connection, walletAdapter, HookAmmIdl);
 
     // Trade - wallet will prompt user for approval
     const buyParams = {
@@ -464,7 +458,7 @@ function TradingComponent() {
 // Different signers for different operations
 const connection = new Connection('https://api.devnet.solana.com');
 const adminKeypair = Keypair.generate();
-const client = HookAmmClient.create(connection, adminKeypair, programIdl);
+const client = HookAmmClient.create(connection, adminKeypair, HookAmmIdl);
 
 // Admin operations use admin keypair (default)
 await client.initializeGlobalConfig(
@@ -556,6 +550,21 @@ try {
 
 ## Migration Guide
 
+### From v0.4.1 to v0.4.2
+
+**Built-in IDL**: No need to provide IDL separately anymore!
+
+```typescript
+// Before (v0.4.1)
+import { HookAmmClient } from 'hook-amm-sdk';
+const programIdl = { /* you had to provide this */ };
+const client = HookAmmClient.create(connection, signer, programIdl);
+
+// After (v0.4.2)
+import { HookAmmClient, HookAmmIdl } from 'hook-amm-sdk';
+const client = HookAmmClient.create(connection, signer, HookAmmIdl);
+```
+
 ### From v0.3.0 to v0.4.0
 
 1. **Remove V2/V3 imports**: Use only `HookAmmClient` now
@@ -564,7 +573,7 @@ try {
    import { HookAmmClientV2 } from 'hook-amm-sdk';
    
    // After
-   import { HookAmmClient } from 'hook-amm-sdk';
+   import { HookAmmClient, HookAmmIdl } from 'hook-amm-sdk';
    ```
 
 2. **Update CreateBondingCurveParams**: Parameter names have changed
@@ -587,14 +596,14 @@ try {
    };
    ```
 
-3. **Factory method**: Use `.create()` for wallet adapter support
+3. **Use built-in IDL**: Import `HookAmmIdl` instead of providing your own
    ```typescript
    // Before
-   const client = new HookAmmClientV2(connection, wallet, programIdl);
+   const client = new HookAmmClientV2(connection, wallet, yourIdl);
    
    // After
-   const client = HookAmmClient.create(connection, walletOrKeypair, programIdl);
-   // Or continue using: new HookAmmClient(connection, wallet, programIdl);
+   import { HookAmmIdl } from 'hook-amm-sdk';
+   const client = HookAmmClient.create(connection, walletOrKeypair, HookAmmIdl);
    ```
 
 ## Constants

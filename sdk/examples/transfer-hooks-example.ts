@@ -1,5 +1,5 @@
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
-import { HookAmmClient } from '../src/core/client';
+import { HookAmmClient, HookAmmIdl } from '../src';
 import BN from 'bn.js';
 
 // Example showing how to use HookAMM with Token-2022 transfer hooks
@@ -8,9 +8,8 @@ async function transferHooksExample() {
   const connection = new Connection('https://api.devnet.solana.com');
   const wallet = Keypair.generate(); // In real use, load your wallet
   
-  // Initialize HookAMM client (you'll need the program IDL)
-  const idl = {}; // Load your program IDL here
-  const hookAmm = new HookAmmClient(connection, { publicKey: wallet.publicKey, signTransaction: async (tx) => tx, signAllTransactions: async (txs) => txs }, idl);
+  // Initialize HookAMM client with built-in IDL
+  const hookAmm = new HookAmmClient(connection, { publicKey: wallet.publicKey, signTransaction: async (tx) => tx, signAllTransactions: async (txs) => txs }, HookAmmIdl);
 
   // Example Token-2022 mint with transfer hooks
   const tokenMint = new PublicKey('YOUR_TOKEN_2022_MINT_WITH_HOOKS');
@@ -101,8 +100,7 @@ async function transferHooksExample() {
 async function createCurveWithHooksExample() {
   const connection = new Connection('https://api.devnet.solana.com');
   const creator = Keypair.generate();
-  const idl = {}; // Load your program IDL
-  const hookAmm = new HookAmmClient(connection, { publicKey: creator.publicKey, signTransaction: async (tx) => tx, signAllTransactions: async (txs) => txs }, idl);
+  const hookAmm = new HookAmmClient(connection, { publicKey: creator.publicKey, signTransaction: async (tx) => tx, signAllTransactions: async (txs) => txs }, HookAmmIdl);
 
   // Token-2022 mint with transfer hooks
   const tokenMint = new PublicKey('YOUR_TOKEN_2022_MINT_WITH_HOOKS');
